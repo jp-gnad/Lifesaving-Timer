@@ -284,6 +284,9 @@ async function renderTimer(id) {
     startedAt: 0,
     displayed: 0,
     segments: [],
+    frequencies: [],
+    frequencyStartedAt: null,
+    frequencyTaps: 0,
     officialTime: null,
     discipline: "normal",
   };
@@ -297,6 +300,7 @@ async function renderTimer(id) {
       </div>
       <section class="card clock-card" aria-label="Stoppuhr">
         <div class="clock-status" id="clock-status">Bereit</div><div class="clock" id="clock" aria-live="off">00:00,00</div>
+        <div class="frequency-progress" id="frequency-progress" aria-hidden="true"><span id="frequency-bar"></span></div>
         <p class="progress-note" id="progress">0 / 20 Laps</p>
         <div class="timer-actions">
           <button class="button secondary timer-control" id="left-action" disabled>${icon("trash")} Löschen</button>
@@ -312,7 +316,7 @@ async function renderTimer(id) {
       <section class="review-view" id="review-view" hidden></section>
     </div>`;
 
-  const elements = Object.fromEntries(["timer-view", "review-view", "mode-button", "mode-name", "mode-laps", "discipline-dialog", "clock-status", "clock", "left-action", "right-action", "progress", "lap-list"].map((key) => [key, document.querySelector(`#${key}`)]));
+  const elements = Object.fromEntries(["timer-view", "review-view", "mode-button", "mode-name", "mode-laps", "discipline-dialog", "clock-status", "clock", "frequency-progress", "frequency-bar", "left-action", "right-action", "progress", "lap-list"].map((key) => [key, document.querySelector(`#${key}`)]));
 
   const currentCs = () => timer.status === "running" ? timer.displayed + Math.floor((performance.now() - timer.startedAt) / 10) : timer.displayed;
   const capturedTotal = () => timer.segments.reduce((sum, value) => sum + value, 0);
@@ -359,7 +363,51 @@ async function renderTimer(id) {
     elements.clock.textContent = formatTime(total);
     const liveLap = document.querySelector("#live-lap-time");
     if (liveLap) liveLap.textContent = formatTime(total - capturedTotal());
+    updateFrequencyProgress();
     if (timer.status === "running") animationFrame = requestAnimationFrame(drawClock);
+  }
+
+  function resetFrequencyCapture() {
+    timer.frequencyStartedAt = null;
+    timer.frequencyTaps = 0;
+    elements["frequency-progress"].classList.remove("active");
+    elements["frequency-bar"].style.transform = "scaleX(0)";
+  }
+
+  function finishFrequency(endedAt = performance.now()) {
+    if (timer.frequencyStartedAt === null) return;
+    const elapsedMs = Math.min(10_000, Math.max(1, endedAt - timer.frequencyStartedAt));
+    timer.frequencies[timer.segments.length] = Math.round((timer.frequencyTaps * 60_000) / elapsedMs);
+    resetFrequencyCapture();
+  }
+
+  function updateFrequencyProgress(now = performance.now()) {
+    if (timer.frequencyStartedAt === null) return;
+    const elapsedMs = now - timer.frequencyStartedAt;
+    if (elapsedMs >= 10_000) {
+      finishFrequency(timer.frequencyStartedAt + 10_000);
+      renderLaps();
+      return;
+    }
+    elements["frequency-progress"].classList.add("active");
+    elements["frequency-bar"].style.transform = `scaleX(${1 - elapsedMs / 10_000})`;
+  }
+
+  function tapFrequency() {
+    if (timer.status !== "running" || timer.frequencies[timer.segments.length] !== undefined) return;
+    const now = performance.now();
+    if (timer.frequencyStartedAt === null) {
+      timer.frequencyStartedAt = now;
+      timer.frequencyTaps = 1;
+    } else if (now - timer.frequencyStartedAt < 10_000) {
+      timer.frequencyTaps += 1;
+    }
+    updateFrequencyProgress(now);
+  }
+
+  function lapValues(time, index, isCurrent = false, isPlaceholder = false) {
+    const frequency = timer.frequencies[index];
+    return `<span class="lap-values"><strong ${isCurrent ? 'id="live-lap-time"' : (isPlaceholder ? 'class="lap-placeholder"' : "")}>${time}</strong>${Number.isInteger(frequency) ? `<small>${frequency}/min</small>` : ""}</span>`;
   }
 
   function renderLaps() {
@@ -374,15 +422,15 @@ async function renderTimer(id) {
         const time = value !== undefined
           ? formatTime(value)
           : (isCurrent ? formatTime(currentCs() - capturedTotal()) : "–");
-        return `<div class="lap-row ${isCurrent ? "current" : ""}"><span>Runde ${index + 1}</span><strong ${isCurrent ? 'id="live-lap-time"' : 'class="lap-placeholder"'}>${time}</strong></div>`;
+        return `<div class="lap-row ${isCurrent ? "current" : ""}"><span>Runde ${index + 1}</span>${lapValues(time, index, isCurrent, value === undefined && !isCurrent)}</div>`;
       }).join("");
       return;
     }
 
     elements["lap-list"].hidden = timer.segments.length === 0 && !hasLiveLap;
-    const liveRow = hasLiveLap ? `<div class="lap-row current"><span>Runde ${timer.segments.length + 1}</span><strong id="live-lap-time">${formatTime(currentCs() - capturedTotal())}</strong></div>` : "";
+    const liveRow = hasLiveLap ? `<div class="lap-row current"><span>Runde ${timer.segments.length + 1}</span>${lapValues(formatTime(currentCs() - capturedTotal()), timer.segments.length, true)}</div>` : "";
     const completedRows = timer.segments.map((value, index) => ({ value, index })).reverse().map(({ value, index }) => {
-      return `<div class="lap-row"><span>Runde ${index + 1}</span><strong>${formatTime(value)}</strong></div>`;
+      return `<div class="lap-row"><span>Runde ${index + 1}</span>${lapValues(formatTime(value), index)}</div>`;
     }).join("");
     elements["lap-list"].innerHTML = liveRow + completedRows;
   }
@@ -432,7 +480,8 @@ async function renderTimer(id) {
 
   function resetTimer() {
     cancelAnimationFrame(animationFrame);
-    Object.assign(timer, { status: "idle", startedAt: 0, displayed: 0, segments: [], officialTime: null });
+    Object.assign(timer, { status: "idle", startedAt: 0, displayed: 0, segments: [], frequencies: [], officialTime: null });
+    resetFrequencyCapture();
     elements.clock.textContent = "00:00,00";
     elements["clock-status"].textContent = "Bereit";
     elements["mode-button"].disabled = false;
@@ -449,6 +498,8 @@ async function renderTimer(id) {
     const total = currentCs();
     const segment = total - capturedTotal();
     if (segment <= 0) return false;
+    finishFrequency();
+    if (timer.frequencies[timer.segments.length] === undefined) timer.frequencies[timer.segments.length] = null;
     timer.segments.push(segment);
     renderLaps(); updateProgress();
     return true;
@@ -460,6 +511,7 @@ async function renderTimer(id) {
     const reviewSegments = item.flexible
       ? timer.segments
       : Array.from({ length: item.laps }, (_, index) => timer.segments[index] ?? null);
+    const reviewFrequencies = reviewSegments.map((_, index) => timer.frequencies[index] ?? null);
     const optionMarkup = () => participants.map((person) => `<option value="${person.id}">${escapeHtml(person.name)} · ${escapeHtml(person.age_group)} · ${escapeHtml(person.organization)}</option>`).join("");
     const assignmentMarkup = item.team
       ? `<fieldset class="team-assignment"><legend>Mannschaft</legend>${Array.from({ length: 4 }, (_, index) => `<div class="field"><label for="participant-${index + 1}">Position ${index + 1}</label><select class="participant-select" id="participant-${index + 1}"><option value="">Auswählen …</option>${optionMarkup()}</select></div>`).join("")}</fieldset>`
@@ -470,7 +522,7 @@ async function renderTimer(id) {
     setDocumentTitle(`Ergebnis prüfen – ${event.name}`);
     review.innerHTML = `<div class="review-topbar"><button class="button secondary icon-button" id="close-review" aria-label="Zurück zum Timer">${icon("arrow-left")}</button><h1>Ergebnis prüfen</h1><button class="button danger icon-button" id="discard-review" aria-label="Messung löschen" title="Messung löschen">${icon("trash")}</button></div>
       <div class="review-content">
-      <div class="edit-times">${reviewSegments.map((value, index) => `<div class="field"><label for="segment-${index}">Runde ${index + 1}</label><input class="segment-input" id="segment-${index}" inputmode="decimal" value="${value === null ? "" : formatReviewTime(value)}" aria-describedby="save-error"></div>`).join("")}</div>
+      <div class="edit-times">${reviewSegments.map((value, index) => `<div class="field review-lap-field"><strong>Runde ${index + 1}</strong><div class="review-lap-inputs"><label><span>Zeit (s)</span><input class="segment-input" id="segment-${index}" inputmode="decimal" value="${value === null ? "" : formatReviewTime(value)}" aria-label="Zeit Runde ${index + 1}" aria-describedby="save-error"></label><label><span>Freq.</span><input class="frequency-input" id="frequency-${index}" inputmode="numeric" value="${reviewFrequencies[index] ?? ""}" aria-label="Frequenz Runde ${index + 1}" aria-describedby="save-error"></label></div></div>`).join("")}</div>
       <div class="total-summary"><span>Summe der Abschnitte</span><strong id="save-total">${formatReviewTime(capturedTotal())}</strong></div>
       <div class="field official-time-field"><label for="official-time">Offizielle Zeit</label><input id="official-time" inputmode="decimal" value="${formatReviewTime(timer.officialTime ?? capturedTotal())}" aria-describedby="save-error"></div>
       ${assignmentMarkup}
@@ -491,6 +543,7 @@ async function renderTimer(id) {
       </form></dialog>`;
 
     const inputs = [...review.querySelectorAll(".segment-input")];
+    const frequencyInputs = [...review.querySelectorAll(".frequency-input")];
     const officialInput = review.querySelector("#official-time");
     const participantSelects = [...review.querySelectorAll(".participant-select")];
     const saveResult = review.querySelector("#save-result");
@@ -498,16 +551,27 @@ async function renderTimer(id) {
     const personForm = review.querySelector("#review-person-form");
     function readCorrections(showError = false) {
       const segments = inputs.map((input) => parseReviewTime(input.value));
+      const frequencies = frequencyInputs.map((input) => {
+        const value = input.value.trim();
+        if (!value) return null;
+        return /^\d{1,3}$/.test(value) && Number(value) > 0 ? Number(value) : Number.NaN;
+      });
       const officialTime = parseReviewTime(officialInput.value);
       const invalidSegments = segments.some((value) => value === null || value <= 0);
+      const invalidFrequencies = frequencies.some((value) => Number.isNaN(value));
       const invalidOfficialTime = officialTime === null || officialTime <= 0;
       review.querySelector("#save-total").textContent = invalidSegments ? "–" : formatReviewTime(segments.reduce((sum, value) => sum + value, 0));
-      review.querySelector("#save-error").textContent = showError && (invalidSegments || invalidOfficialTime)
-        ? `Bitte ${invalidSegments ? "alle Abschnittszeiten" : "die offizielle Zeit"} als Sekunden, z. B. 61,00, eingeben.`
+      review.querySelector("#save-error").textContent = showError
+        ? (invalidSegments
+          ? "Bitte alle Abschnittszeiten als Sekunden, z. B. 61,00, eingeben."
+          : (invalidOfficialTime
+            ? "Bitte die offizielle Zeit als Sekunden, z. B. 61,00, eingeben."
+            : (invalidFrequencies ? "Frequenzen bitte als ganze Zahl von 1 bis 999 eingeben." : "")))
         : "";
-      return invalidSegments || invalidOfficialTime ? null : { segments, officialTime };
+      return invalidSegments || invalidOfficialTime || invalidFrequencies ? null : { segments, frequencies, officialTime };
     }
     inputs.forEach((input) => input.addEventListener("input", () => readCorrections(false)));
+    frequencyInputs.forEach((input) => input.addEventListener("input", () => readCorrections(false)));
     officialInput.addEventListener("input", () => readCorrections(false));
     bindDialogClose(personDialog);
     review.querySelector("#new-review-person").addEventListener("click", () => {
@@ -547,6 +611,7 @@ async function renderTimer(id) {
       const corrections = readCorrections(false);
       if (corrections) {
         timer.segments = corrections.segments;
+        timer.frequencies = corrections.frequencies;
         timer.displayed = corrections.segments.reduce((sum, value) => sum + value, 0);
         timer.officialTime = corrections.officialTime;
         elements.clock.textContent = formatTime(timer.displayed);
@@ -571,7 +636,7 @@ async function renderTimer(id) {
       try {
         event.currentTarget.disabled = true;
         const assignment = item.team ? { participantIds } : { participantId: participantIds[0] };
-        await api(`/events/${id}/results`, { method: "POST", body: JSON.stringify({ ...assignment, discipline: timer.discipline, segments: corrections.segments, officialTime: corrections.officialTime }) });
+        await api(`/events/${id}/results`, { method: "POST", body: JSON.stringify({ ...assignment, discipline: timer.discipline, segments: corrections.segments, frequencies: corrections.frequencies, officialTime: corrections.officialTime }) });
         showToast("Ergebnis wurde gespeichert. Bereit für die nächste Person.");
         resetTimer();
       } catch (err) {
@@ -611,8 +676,14 @@ async function renderTimer(id) {
   });
 
   elements["timer-view"].addEventListener("click", (event) => {
-    if (event.clientY < document.documentElement.clientHeight / 2) return;
     if (event.target.closest("button, a, input, select, dialog")) return;
+    if (timer.status !== "running") return;
+    const actionsTop = elements["left-action"].parentElement.getBoundingClientRect().top;
+    if (event.clientY < actionsTop) {
+      tapFrequency();
+      return;
+    }
+    if (event.clientY < document.documentElement.clientHeight / 2) return;
     if (!addSegment()) return;
     updateControls();
   });
@@ -623,6 +694,8 @@ async function renderTimer(id) {
       timer.startedAt = performance.now();
       timer.displayed = 0;
       timer.segments = [];
+      timer.frequencies = [];
+      resetFrequencyCapture();
       elements["clock-status"].textContent = "Läuft";
       elements["mode-button"].disabled = true;
       renderLaps(); updateProgress(); updateControls(); drawClock();
@@ -635,6 +708,8 @@ async function renderTimer(id) {
       timer.displayed = finalTime;
       timer.officialTime = finalTime;
       timer.status = "stopped";
+      finishFrequency();
+      if (timer.frequencies[timer.segments.length] === undefined) timer.frequencies[timer.segments.length] = null;
       timer.segments.push(finalSegment);
       cancelAnimationFrame(animationFrame);
       elements.clock.textContent = formatTime(timer.displayed);
@@ -644,6 +719,8 @@ async function renderTimer(id) {
       return;
     }
     timer.segments.pop();
+    timer.frequencies.pop();
+    resetFrequencyCapture();
     timer.officialTime = null;
     timer.status = "running";
     timer.startedAt = performance.now();
@@ -715,7 +792,7 @@ async function renderViewer(id) {
         <div class="result-head"><span class="rank-badge">${index + 1}</span><div><strong>${escapeHtml(displayName)}</strong>${details}</div>
         <button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis ${index + 1} löschen" title="Löschen">${icon("trash")}</button></div>
         <div class="result-time">${formatTime(result.total_centiseconds)}</div>
-        <div class="result-segments">${result.segments.map((value, lap) => `<span>Lap ${lap + 1}<strong>${formatTime(value)}</strong></span>`).join("")}</div>
+        <div class="result-segments">${result.segments.map((value, lap) => `<span><span class="result-lap-label">Lap ${lap + 1}${Number.isInteger(result.frequencies?.[lap]) ? `<small>${result.frequencies[lap]}/min</small>` : ""}</span><strong>${formatTime(value)}</strong></span>`).join("")}</div>
       </article>`;
       }).join("")}</div>`;
     const tableView = `<div class="result-table-wrap"><table class="result-table">
@@ -727,7 +804,7 @@ async function renderViewer(id) {
         const details = teamMembers.length ? teamMembers.map((member) => `${member.position}. ${escapeHtml(member.name)}`).join("<br>") : `Jg. ${result.birth_year} · ${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}`;
         return `<tr><td><strong>${index + 1}. ${escapeHtml(displayName)}</strong><small>${details}</small></td>
         <td class="official-result">${formatTime(result.total_centiseconds)}</td>
-        ${Array.from({ length: lapCount }, (_, lap) => `<td>${result.segments[lap] ? formatTime(result.segments[lap]) : "–"}</td>`).join("")}
+        ${Array.from({ length: lapCount }, (_, lap) => `<td>${result.segments[lap] ? `<span class="table-lap-value">${formatTime(result.segments[lap])}${Number.isInteger(result.frequencies?.[lap]) ? `<small>${result.frequencies[lap]}/min</small>` : ""}</span>` : "–"}</td>`).join("")}
         <td><button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis ${index + 1} löschen" title="Löschen">${icon("trash")}</button></td></tr>`;
       }).join("")}</tbody>
     </table></div>`;
