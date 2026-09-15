@@ -195,8 +195,6 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 .dialog-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .dialog-title-row h2 { margin: 0; }
 .discipline-list { display: grid; gap: 8px; }
-.discipline-groups { display: grid; gap: 22px; }
-.discipline-group h3 { margin: 0 0 9px; color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .06em; }
 .discipline-choice { width: 100%; min-height: 58px; border: 1px solid var(--line); border-radius: 9px; padding: 9px 12px; background: var(--surface); color: var(--text); display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; cursor: pointer; }
 .discipline-choice > span:first-child { display: grid; }
 .discipline-choice small { color: var(--muted); }
@@ -277,18 +275,33 @@ body.timer-page.timer-locked { position: fixed; inset: 0; width: 100%; height: 1
 .timer-page .lap-list.card { margin-top: 36px; border: 0; border-top: 1px solid #d8dde7; border-radius: 0; padding: 0; background: transparent; }
 .timer-page.timer-locked .lap-list.card { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .timer-page .lap-row { min-height: 44px; align-items: center; border-bottom-color: #d8dde7; padding: 6px 2px; color: #172033; font-size: 16px; }
-.timer-page .review-view { min-height: calc(100dvh - 24px); color: #172033; }
+.timer-page .lap-placeholder { color: #98a2b3; font-weight: 500; }
+.timer-page .review-view { min-height: calc(100dvh - max(24px, env(safe-area-inset-top))); color: #172033; }
 .timer-page .review-topbar { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; gap: 10px; }
 .timer-page .review-topbar h1 { margin: 0; text-align: center; font-size: 22px; }
 .timer-page .review-topbar .button { width: 44px; min-height: 44px; border: 0; border-radius: 50%; padding: 0; background: transparent; color: #0a84ff; }
 .timer-page .review-topbar .button.danger { color: #d92d20; }
-.timer-page .review-content { padding-top: 34px; }
+.timer-page .review-content { padding: clamp(12px, 2.5vh, 20px) 0 max(40px, calc(env(safe-area-inset-bottom) + 24px)); }
+.timer-page .review-content .field { min-width: 0; gap: 4px; }
+.timer-page .review-content input, .timer-page .review-content select { min-width: 0; min-height: 46px; text-overflow: ellipsis; }
+.timer-page .edit-times { gap: 8px 10px; margin-bottom: 12px; }
+.timer-page .total-summary { padding: 11px 0; }
+.timer-page .official-time-field { margin: 12px 0; }
+.timer-page .team-assignment { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 10px; }
+.timer-page .team-assignment legend { margin-bottom: 3px; }
+.timer-page .add-review-person { margin-top: 9px; }
+.timer-page .save-actions { margin-top: 14px; }
 .timer-page label { color: #172033; }
 .timer-page input, .timer-page select { border-color: #d8dde7; background: #fff; color: #172033; }
 .timer-page .total-summary { border-color: #d8dde7; color: #172033; }
 .timer-page .notice { border-color: #d5a11e; background: #fff9e8; color: #725712; }
 .timer-page dialog { background: #fff; color: #172033; }
 .timer-page dialog::backdrop { background: rgba(23, 32, 51, .45); }
+.timer-page .mode-dialog-header { display: grid; grid-template-columns: 42px 1fr 42px; align-items: center; gap: 10px; margin-bottom: 16px; }
+.timer-page .mode-dialog-header h2 { grid-column: 2; margin: 0; text-align: center; }
+.timer-page .mode-dialog-header #mode-back { grid-column: 1; grid-row: 1; }
+.timer-page .mode-dialog-header #close-mode { grid-column: 3; grid-row: 1; }
+.timer-page .mode-category { min-height: 66px; }
 .timer-page .discipline-choice { border-color: #d8dde7; background: #f7f9fc; color: #172033; }
 .timer-page .discipline-choice small { color: #667085; }
 .timer-page .discipline-choice.selected { border-color: #0a84ff; background: #edf6ff; }

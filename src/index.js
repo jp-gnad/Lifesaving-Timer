@@ -240,7 +240,15 @@ export default {
     try {
       const url = new URL(request.url);
       if (url.pathname.startsWith("/api/")) return await handleApi(request, env);
-      return env.ASSETS.fetch(request);
+      const response = await env.ASSETS.fetch(request);
+      if (!response.headers.get("content-type")?.includes("text/html")) return response;
+      const headers = new Headers(response.headers);
+      headers.set("cache-control", "no-store");
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      });
     } catch (error) {
       console.error(error);
       return fail(error instanceof Error ? error.message : "Unbekannter Fehler.", 400);

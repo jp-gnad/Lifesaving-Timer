@@ -304,8 +304,9 @@ async function renderTimer(id) {
         </div>
       </section>
       <div class="card lap-list" id="lap-list" hidden></div>
-      <dialog id="discipline-dialog"><div class="dialog-body mode-dialog-body"><div class="dialog-title-row"><h2>Stoppmodus</h2><button class="button secondary icon-button" id="close-mode" aria-label="Menü schließen">${icon("x")}</button></div>
-        <div class="discipline-groups">${disciplineGroups.map((group) => `<section class="discipline-group"><h3>${group.name}</h3><div class="discipline-list">${Object.entries(disciplines).filter(([, item]) => item.group === group.id).map(([disciplineId, item]) => `<button class="discipline-choice" data-discipline="${disciplineId}"><span><strong>${item.name}</strong><small>${item.flexible ? "max. " : ""}${item.laps} Laps</small></span><span class="choice-check">${disciplineId === "normal" ? icon("check") : ""}</span></button>`).join("")}</div></section>`).join("")}</div>
+      <dialog id="discipline-dialog"><div class="dialog-body mode-dialog-body"><div class="mode-dialog-header"><button class="button secondary icon-button" id="mode-back" type="button" aria-label="Zurück zu den Kategorien" hidden>${icon("arrow-left")}</button><h2 id="mode-dialog-title">Stoppmodus</h2><button class="button secondary icon-button" id="close-mode" aria-label="Menü schließen">${icon("x")}</button></div>
+        <div class="discipline-list" id="mode-category-list"></div>
+        <div class="discipline-list" id="mode-discipline-list" hidden></div>
       </div></dialog>
       </div>
       <section class="review-view" id="review-view" hidden></section>
@@ -316,6 +317,42 @@ async function renderTimer(id) {
   const currentCs = () => timer.status === "running" ? timer.displayed + Math.floor((performance.now() - timer.startedAt) / 10) : timer.displayed;
   const capturedTotal = () => timer.segments.reduce((sum, value) => sum + value, 0);
   const config = () => disciplines[timer.discipline];
+  const modeTitle = document.querySelector("#mode-dialog-title");
+  const modeBack = document.querySelector("#mode-back");
+  const modeCategoryList = document.querySelector("#mode-category-list");
+  const modeDisciplineList = document.querySelector("#mode-discipline-list");
+
+  function renderModeCategories() {
+    const selectedGroup = config().group;
+    modeTitle.textContent = "Stoppmodus";
+    modeBack.hidden = true;
+    modeCategoryList.hidden = false;
+    modeDisciplineList.hidden = true;
+    modeCategoryList.innerHTML = disciplineGroups.map((group) => {
+      const groupDisciplines = Object.values(disciplines).filter((item) => item.group === group.id);
+      const selected = selectedGroup === group.id;
+      const isNormal = group.id === "normal";
+      const detail = isNormal ? "max. 20 Laps" : `${groupDisciplines.length} Disziplinen`;
+      const action = isNormal ? `data-discipline="normal"` : `data-mode-group="${group.id}"`;
+      const trailingIcon = selected ? icon("check") : (isNormal ? "" : icon("arrow-right"));
+      return `<button class="discipline-choice mode-category ${selected ? "selected" : ""}" type="button" ${action}><span><strong>${group.name}</strong><small>${detail}</small></span><span class="choice-check">${trailingIcon}</span></button>`;
+    }).join("");
+  }
+
+  function renderModeGroup(groupId) {
+    const group = disciplineGroups.find((item) => item.id === groupId);
+    if (!group || group.id === "normal") return;
+    modeTitle.textContent = group.name;
+    modeBack.hidden = false;
+    modeCategoryList.hidden = true;
+    modeDisciplineList.hidden = false;
+    modeDisciplineList.innerHTML = Object.entries(disciplines)
+      .filter(([, item]) => item.group === groupId)
+      .map(([disciplineId, item]) => {
+        const selected = disciplineId === timer.discipline;
+        return `<button class="discipline-choice ${selected ? "selected" : ""}" type="button" data-discipline="${disciplineId}"><span><strong>${item.name}</strong><small>${item.laps} Laps</small></span><span class="choice-check">${selected ? icon("check") : ""}</span></button>`;
+      }).join("");
+  }
 
   function drawClock() {
     const total = currentCs();
@@ -326,7 +363,22 @@ async function renderTimer(id) {
   }
 
   function renderLaps() {
+    const item = config();
     const hasLiveLap = timer.status === "running";
+
+    if (!item.flexible) {
+      elements["lap-list"].hidden = false;
+      elements["lap-list"].innerHTML = Array.from({ length: item.laps }, (_, index) => {
+        const value = timer.segments[index];
+        const isCurrent = hasLiveLap && index === timer.segments.length;
+        const time = value !== undefined
+          ? formatTime(value)
+          : (isCurrent ? formatTime(currentCs() - capturedTotal()) : "–");
+        return `<div class="lap-row ${isCurrent ? "current" : ""}"><span>Runde ${index + 1}</span><strong ${isCurrent ? 'id="live-lap-time"' : 'class="lap-placeholder"'}>${time}</strong></div>`;
+      }).join("");
+      return;
+    }
+
     elements["lap-list"].hidden = timer.segments.length === 0 && !hasLiveLap;
     const liveRow = hasLiveLap ? `<div class="lap-row current"><span>Runde ${timer.segments.length + 1}</span><strong id="live-lap-time">${formatTime(currentCs() - capturedTotal())}</strong></div>` : "";
     const completedRows = timer.segments.map((value, index) => ({ value, index })).reverse().map(({ value, index }) => {
@@ -344,11 +396,7 @@ async function renderTimer(id) {
     const item = config();
     elements["mode-name"].textContent = item.name;
     elements["mode-laps"].textContent = `${item.flexible ? "max. " : ""}${item.laps} Laps`;
-    document.querySelectorAll(".discipline-choice").forEach((choice) => {
-      const selected = choice.dataset.discipline === timer.discipline;
-      choice.classList.toggle("selected", selected);
-      choice.querySelector(".choice-check").innerHTML = selected ? icon("check") : "";
-    });
+    renderLaps();
     updateProgress();
   }
 
@@ -408,6 +456,9 @@ async function renderTimer(id) {
   function showReview() {
     const review = elements["review-view"];
     const item = config();
+    const reviewSegments = item.flexible
+      ? timer.segments
+      : Array.from({ length: item.laps }, (_, index) => timer.segments[index] ?? null);
     const optionMarkup = () => participants.map((person) => `<option value="${person.id}">${escapeHtml(person.name)} · ${escapeHtml(person.age_group)} · ${escapeHtml(person.organization)}</option>`).join("");
     const assignmentMarkup = item.team
       ? `<fieldset class="team-assignment"><legend>Mannschaft</legend>${Array.from({ length: 4 }, (_, index) => `<div class="field"><label for="participant-${index + 1}">Position ${index + 1}</label><select class="participant-select" id="participant-${index + 1}"><option value="">Auswählen …</option>${optionMarkup()}</select></div>`).join("")}</fieldset>`
@@ -418,7 +469,7 @@ async function renderTimer(id) {
     setDocumentTitle(`Ergebnis prüfen – ${event.name}`);
     review.innerHTML = `<div class="review-topbar"><button class="button secondary icon-button" id="close-review" aria-label="Zurück zum Timer">${icon("arrow-left")}</button><h1>Ergebnis prüfen</h1><button class="button danger icon-button" id="discard-review" aria-label="Messung löschen" title="Messung löschen">${icon("trash")}</button></div>
       <div class="review-content">
-      <div class="edit-times">${timer.segments.map((value, index) => `<div class="field"><label for="segment-${index}">Runde ${index + 1}</label><input class="segment-input" id="segment-${index}" inputmode="decimal" value="${formatReviewTime(value)}" aria-describedby="save-error"></div>`).join("")}</div>
+      <div class="edit-times">${reviewSegments.map((value, index) => `<div class="field"><label for="segment-${index}">Runde ${index + 1}</label><input class="segment-input" id="segment-${index}" inputmode="decimal" value="${value === null ? "" : formatReviewTime(value)}" aria-describedby="save-error"></div>`).join("")}</div>
       <div class="total-summary"><span>Summe der Abschnitte</span><strong id="save-total">${formatReviewTime(capturedTotal())}</strong></div>
       <div class="field official-time-field"><label for="official-time">Offizielle Zeit</label><input id="official-time" inputmode="decimal" value="${formatReviewTime(timer.officialTime ?? capturedTotal())}" aria-describedby="save-error"></div>
       ${assignmentMarkup}
@@ -531,13 +582,24 @@ async function renderTimer(id) {
   }
 
   bindDialogClose(elements["discipline-dialog"]);
-  elements["mode-button"].addEventListener("click", () => openDialog("#discipline-dialog"));
+  elements["mode-button"].addEventListener("click", () => {
+    renderModeCategories();
+    elements["discipline-dialog"].showModal();
+  });
   document.querySelector("#close-mode").addEventListener("click", () => elements["discipline-dialog"].close());
-  document.querySelectorAll(".discipline-choice").forEach((choice) => choice.addEventListener("click", () => {
-    timer.discipline = choice.dataset.discipline;
+  modeBack.addEventListener("click", renderModeCategories);
+  elements["discipline-dialog"].addEventListener("click", (event) => {
+    const groupChoice = event.target.closest("[data-mode-group]");
+    if (groupChoice) {
+      renderModeGroup(groupChoice.dataset.modeGroup);
+      return;
+    }
+    const disciplineChoice = event.target.closest("[data-discipline]");
+    if (!disciplineChoice) return;
+    timer.discipline = disciplineChoice.dataset.discipline;
     updateMode();
     elements["discipline-dialog"].close();
-  }));
+  });
   elements["left-action"].addEventListener("click", () => {
     if (timer.status === "stopped") {
       resetTimer();
