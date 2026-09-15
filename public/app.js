@@ -31,7 +31,7 @@ let animationFrame = null;
 let toastTimer = null;
 
 function icon(name) {
-  return `<svg class="icon" aria-hidden="true"><use href="/icons.svg?v=table-view#${name}"></use></svg>`;
+  return `<svg class="icon" aria-hidden="true"><use href="/icons.svg?v=lap-glue#${name}"></use></svg>`;
 }
 
 function escapeHtml(value = "") {
@@ -80,6 +80,14 @@ function formatReviewTime(centiseconds) {
   return `${Math.floor(safe / 100)},${String(safe % 100).padStart(2, "0")}`;
 }
 
+function formatCumulativeReviewTime(centiseconds) {
+  const safe = Math.max(0, Math.floor(Number(centiseconds) || 0));
+  const minutes = Math.floor(safe / 6000);
+  const seconds = Math.floor((safe % 6000) / 100);
+  const hundredths = safe % 100;
+  return `${minutes}:${String(seconds).padStart(2, "0")},${String(hundredths).padStart(2, "0")}`;
+}
+
 function parseTime(value) {
   const match = String(value).trim().match(/^(\d{1,3}):([0-5]\d)[,.](\d{2})$/);
   if (!match) return null;
@@ -90,6 +98,20 @@ function parseReviewTime(value) {
   const match = String(value).trim().match(/^(\d{1,7})[,.](\d{2})$/);
   if (!match) return null;
   return Number(match[1]) * 100 + Number(match[2]);
+}
+
+function lapRangeLabel(laps, prefix = "Lap") {
+  const safeLaps = Array.isArray(laps) && laps.length ? laps : [];
+  if (!safeLaps.length) return prefix;
+  return safeLaps.length === 1
+    ? `${prefix} ${safeLaps[0]}`
+    : `${prefix} ${safeLaps[0]}–${safeLaps[safeLaps.length - 1]}`;
+}
+
+function resultLapGroups(result) {
+  const stored = Array.isArray(result.lap_groups) ? result.lap_groups : [];
+  if (stored.length === result.segments.length && stored.every((group) => Array.isArray(group) && group.length)) return stored;
+  return result.segments.map((_, index) => [index + 1]);
 }
 
 function disciplineOptions(selected = "normal") {
@@ -285,6 +307,7 @@ async function renderTimer(id) {
     displayed: 0,
     segments: [],
     frequencies: [],
+    lapGroups: [],
     frequencyStartedAt: null,
     frequencyTaps: 0,
     officialTime: null,
@@ -480,7 +503,7 @@ async function renderTimer(id) {
 
   function resetTimer() {
     cancelAnimationFrame(animationFrame);
-    Object.assign(timer, { status: "idle", startedAt: 0, displayed: 0, segments: [], frequencies: [], officialTime: null });
+    Object.assign(timer, { status: "idle", startedAt: 0, displayed: 0, segments: [], frequencies: [], lapGroups: [], officialTime: null });
     resetFrequencyCapture();
     elements.clock.textContent = "00:00,00";
     elements["clock-status"].textContent = "Bereit";
@@ -512,6 +535,12 @@ async function renderTimer(id) {
       ? timer.segments
       : Array.from({ length: item.laps }, (_, index) => timer.segments[index] ?? null);
     const reviewFrequencies = reviewSegments.map((_, index) => timer.frequencies[index] ?? null);
+    let lapGroups = timer.lapGroups.length === timer.segments.length
+      ? timer.lapGroups.map((laps, index) => ({ laps: [...laps], value: timer.segments[index] ?? null, frequency: timer.frequencies[index] ?? null }))
+      : reviewSegments.map((value, index) => ({ laps: [index + 1], value, frequency: reviewFrequencies[index] }));
+    let timeMode = "segment";
+    let glueMode = false;
+    const glueHistory = [];
     const optionMarkup = () => participants.map((person) => `<option value="${person.id}">${escapeHtml(person.name)} · ${escapeHtml(person.age_group)} · ${escapeHtml(person.organization)}</option>`).join("");
     const assignmentMarkup = item.team
       ? `<fieldset class="team-assignment"><legend>Mannschaft</legend>${Array.from({ length: 4 }, (_, index) => `<div class="field"><label for="participant-${index + 1}">Position ${index + 1}</label><select class="participant-select" id="participant-${index + 1}"><option value="">Auswählen …</option>${optionMarkup()}</select></div>`).join("")}</fieldset>`
@@ -522,7 +551,9 @@ async function renderTimer(id) {
     setDocumentTitle(`Ergebnis prüfen – ${event.name}`);
     review.innerHTML = `<div class="review-topbar"><button class="button secondary icon-button" id="close-review" aria-label="Zurück zum Timer">${icon("arrow-left")}</button><h1>Ergebnis prüfen</h1><button class="button danger icon-button" id="discard-review" aria-label="Messung löschen" title="Messung löschen">${icon("trash")}</button></div>
       <div class="review-content">
-      <div class="edit-times">${reviewSegments.map((value, index) => `<div class="field review-lap-field"><strong>Runde ${index + 1}</strong><div class="review-lap-inputs"><label><span>Zeit (s)</span><input class="segment-input" id="segment-${index}" inputmode="decimal" value="${value === null ? "" : formatReviewTime(value)}" aria-label="Zeit Runde ${index + 1}" aria-describedby="save-error"></label><label><span>Freq.</span><input class="frequency-input" id="frequency-${index}" inputmode="numeric" value="${reviewFrequencies[index] ?? ""}" aria-label="Frequenz Runde ${index + 1}" aria-describedby="save-error"></label></div></div>`).join("")}</div>
+      <div class="review-tools"><div class="time-mode-toggle" role="group" aria-label="Zeitdarstellung"><button type="button" class="active" data-time-mode="segment" aria-pressed="true">Sekunden</button><button type="button" data-time-mode="cumulative" aria-pressed="false">Kumuliert</button></div><button class="button secondary small glue-mode-toggle" id="glue-mode" type="button" aria-pressed="false">${icon("link")} Kleben</button></div>
+      <div class="glue-hint" id="glue-hint" hidden><span>Verbinde benachbarte Lap-Bereiche über das Kettensymbol.</span><button class="button secondary small" id="undo-glue" type="button" hidden>${icon("undo")} Rückgängig</button></div>
+      <div class="edit-times" id="edit-times"></div>
       <div class="field official-time-field"><label for="official-time">Offizielle Zeit</label><input id="official-time" inputmode="decimal" placeholder="00:00,00" value="${timer.officialTime === null ? "" : formatTime(timer.officialTime)}" aria-describedby="save-error"></div>
       <div class="total-summary"><span>Gestoppte Zeit</span><strong id="save-total" aria-live="polite">${formatTime(capturedTotal())}</strong></div>
       ${assignmentMarkup}
@@ -542,38 +573,132 @@ async function renderTimer(id) {
         <div class="form-actions"><button type="button" class="button secondary" data-close>Abbrechen</button><button type="submit" class="button">Hinzufügen</button></div>
       </form></dialog>`;
 
-    const inputs = [...review.querySelectorAll(".segment-input")];
-    const frequencyInputs = [...review.querySelectorAll(".frequency-input")];
+    const editTimes = review.querySelector("#edit-times");
     const officialInput = review.querySelector("#official-time");
     const participantSelects = [...review.querySelectorAll(".participant-select")];
     const saveResult = review.querySelector("#save-result");
     const personDialog = review.querySelector("#review-person-dialog");
     const personForm = review.querySelector("#review-person-form");
-    function readCorrections(showError = false) {
-      const segments = inputs.map((input) => parseReviewTime(input.value));
-      const frequencies = frequencyInputs.map((input) => {
-        const value = input.value.trim();
-        if (!value) return null;
-        return /^\d{1,3}$/.test(value) && Number(value) > 0 ? Number(value) : Number.NaN;
+
+    function syncLapGroupsFromInputs() {
+      const timeInputs = [...editTimes.querySelectorAll(".segment-input")];
+      const frequencyInputs = [...editTimes.querySelectorAll(".frequency-input")];
+      let previousCumulative = 0;
+      lapGroups.forEach((group, index) => {
+        const timeText = timeInputs[index]?.value.trim() || "";
+        if (!timeText) {
+          group.value = null;
+        } else if (timeMode === "segment") {
+          group.value = parseReviewTime(timeText) ?? Number.NaN;
+        } else {
+          const cumulative = parseTime(timeText);
+          group.value = cumulative !== null && cumulative > previousCumulative
+            ? cumulative - previousCumulative
+            : Number.NaN;
+          if (cumulative !== null && cumulative > previousCumulative) previousCumulative = cumulative;
+        }
+        const frequencyText = frequencyInputs[index]?.value.trim() || "";
+        group.frequency = !frequencyText
+          ? null
+          : (/^\d{1,3}$/.test(frequencyText) && Number(frequencyText) > 0 ? Number(frequencyText) : Number.NaN);
       });
+    }
+
+    function renderLapFields() {
+      let cumulative = 0;
+      editTimes.innerHTML = lapGroups.map((group, index) => {
+        const validValue = Number.isInteger(group.value) && group.value > 0;
+        if (validValue) cumulative += group.value;
+        const displayedTime = !validValue
+          ? ""
+          : (timeMode === "segment" ? formatReviewTime(group.value) : formatCumulativeReviewTime(cumulative));
+        const range = lapRangeLabel(group.laps, "Runde");
+        const glueButton = glueMode && index < lapGroups.length - 1
+          ? `<button class="glue-next" type="button" data-glue-index="${index}" aria-label="${range} mit ${lapRangeLabel(lapGroups[index + 1].laps, "Runde")} verbinden" title="Mit nächster Runde verbinden">${icon("link")}</button>`
+          : "";
+        return `<div class="field review-lap-field ${group.laps.length > 1 ? "glued" : ""}"><div class="review-lap-title"><strong>${range}</strong>${glueButton}</div><div class="review-lap-inputs"><label><span>${timeMode === "segment" ? "Zeit (s)" : "Kumuliert"}</span><input class="segment-input" id="segment-${index}" inputmode="decimal" value="${displayedTime}" placeholder="${timeMode === "segment" ? "0,00" : "0:00,00"}" aria-label="Zeit ${range}" aria-describedby="save-error"></label><label><span>Freq.</span><input class="frequency-input" id="frequency-${index}" inputmode="numeric" value="${Number.isInteger(group.frequency) ? group.frequency : ""}" aria-label="Frequenz ${range}" aria-describedby="save-error"></label></div></div>`;
+      }).join("");
+      editTimes.querySelectorAll("input").forEach((input) => input.addEventListener("input", () => readCorrections(false)));
+      editTimes.querySelectorAll(".glue-next").forEach((button) => button.addEventListener("click", () => {
+        syncLapGroupsFromInputs();
+        const index = Number(button.dataset.glueIndex);
+        const left = lapGroups[index];
+        const right = lapGroups[index + 1];
+        if (!left || !right) return;
+        glueHistory.push(lapGroups.map((group) => ({ laps: [...group.laps], value: group.value, frequency: group.frequency })));
+        const leftValue = Number.isInteger(left.value) && left.value > 0 ? left.value : null;
+        const rightValue = Number.isInteger(right.value) && right.value > 0 ? right.value : null;
+        const mergedFrequency = Number.isInteger(left.frequency) && Number.isInteger(right.frequency)
+          ? (left.frequency === right.frequency ? left.frequency : null)
+          : (Number.isInteger(left.frequency) ? left.frequency : (Number.isInteger(right.frequency) ? right.frequency : null));
+        lapGroups.splice(index, 2, {
+          laps: [...left.laps, ...right.laps],
+          value: leftValue !== null || rightValue !== null ? (leftValue || 0) + (rightValue || 0) : null,
+          frequency: mergedFrequency,
+        });
+        review.querySelector("#undo-glue").hidden = false;
+        renderLapFields();
+        readCorrections(false);
+      }));
+    }
+
+    function readCorrections(showError = false) {
+      syncLapGroupsFromInputs();
+      const segments = lapGroups.map((group) => group.value);
+      const frequencies = lapGroups.map((group) => group.frequency);
       const officialText = officialInput.value.trim();
       const officialTime = officialText ? parseTime(officialText) : null;
-      const invalidSegments = segments.some((value) => value === null || value <= 0);
+      const invalidSegments = segments.some((value) => value !== null && (!Number.isInteger(value) || value <= 0));
+      const missingSegments = !segments.some((value) => Number.isInteger(value) && value > 0);
       const invalidFrequencies = frequencies.some((value) => Number.isNaN(value));
       const invalidOfficialTime = Boolean(officialText) && (officialTime === null || officialTime <= 0);
-      const stoppedTime = segments.reduce((sum, value) => sum + (value !== null && value > 0 ? value : 0), 0);
+      const stoppedTime = segments.reduce((sum, value) => sum + (Number.isInteger(value) && value > 0 ? value : 0), 0);
       review.querySelector("#save-total").textContent = formatTime(stoppedTime);
       review.querySelector("#save-error").textContent = showError
-        ? (invalidSegments
-          ? "Bitte alle Abschnittszeiten als Sekunden, z. B. 61,00, eingeben."
+        ? (invalidSegments || missingSegments
+          ? (timeMode === "segment"
+            ? "Abschnittszeiten bitte als Sekunden, z. B. 61,00, eingeben. Leere Runden sind erlaubt."
+            : "Kumulierte Zeiten bitte aufsteigend im Format mm:ss,00 eingeben. Leere Runden sind erlaubt.")
           : (invalidOfficialTime
             ? "Bitte die offizielle Zeit im Format mm:ss,00 eingeben."
             : (invalidFrequencies ? "Frequenzen bitte als ganze Zahl von 1 bis 999 eingeben." : "")))
         : "";
-      return invalidSegments || invalidOfficialTime || invalidFrequencies ? null : { segments, frequencies, officialTime };
+      return invalidSegments || missingSegments || invalidOfficialTime || invalidFrequencies ? null : {
+        segments,
+        frequencies,
+        officialTime,
+        lapGroups: lapGroups.map((group) => [...group.laps]),
+      };
     }
-    inputs.forEach((input) => input.addEventListener("input", () => readCorrections(false)));
-    frequencyInputs.forEach((input) => input.addEventListener("input", () => readCorrections(false)));
+    renderLapFields();
+    review.querySelectorAll("[data-time-mode]").forEach((button) => button.addEventListener("click", () => {
+      if (button.dataset.timeMode === timeMode) return;
+      syncLapGroupsFromInputs();
+      timeMode = button.dataset.timeMode;
+      review.querySelectorAll("[data-time-mode]").forEach((candidate) => {
+        const active = candidate.dataset.timeMode === timeMode;
+        candidate.classList.toggle("active", active);
+        candidate.setAttribute("aria-pressed", String(active));
+      });
+      renderLapFields();
+      readCorrections(false);
+    }));
+    review.querySelector("#glue-mode").addEventListener("click", (event) => {
+      syncLapGroupsFromInputs();
+      glueMode = !glueMode;
+      event.currentTarget.classList.toggle("active", glueMode);
+      event.currentTarget.setAttribute("aria-pressed", String(glueMode));
+      review.querySelector("#glue-hint").hidden = !glueMode;
+      renderLapFields();
+    });
+    review.querySelector("#undo-glue").addEventListener("click", () => {
+      const previous = glueHistory.pop();
+      if (!previous) return;
+      lapGroups = previous;
+      review.querySelector("#undo-glue").hidden = glueHistory.length === 0;
+      renderLapFields();
+      readCorrections(false);
+    });
     officialInput.addEventListener("input", () => readCorrections(false));
     bindDialogClose(personDialog);
     review.querySelector("#new-review-person").addEventListener("click", () => {
@@ -614,7 +739,8 @@ async function renderTimer(id) {
       if (corrections) {
         timer.segments = corrections.segments;
         timer.frequencies = corrections.frequencies;
-        timer.displayed = corrections.segments.reduce((sum, value) => sum + value, 0);
+        timer.lapGroups = corrections.lapGroups;
+        timer.displayed = corrections.segments.reduce((sum, value) => sum + (value || 0), 0);
         timer.officialTime = corrections.officialTime;
         elements.clock.textContent = formatTime(timer.displayed);
       }
@@ -638,7 +764,7 @@ async function renderTimer(id) {
       try {
         event.currentTarget.disabled = true;
         const assignment = item.team ? { participantIds } : { participantId: participantIds[0] };
-        await api(`/events/${id}/results`, { method: "POST", body: JSON.stringify({ ...assignment, discipline: timer.discipline, segments: corrections.segments, frequencies: corrections.frequencies, officialTime: corrections.officialTime }) });
+        await api(`/events/${id}/results`, { method: "POST", body: JSON.stringify({ ...assignment, discipline: timer.discipline, segments: corrections.segments, frequencies: corrections.frequencies, lapGroups: corrections.lapGroups, officialTime: corrections.officialTime }) });
         showToast("Ergebnis wurde gespeichert. Bereit für die nächste Person.");
         resetTimer();
       } catch (err) {
@@ -697,6 +823,7 @@ async function renderTimer(id) {
       timer.displayed = 0;
       timer.segments = [];
       timer.frequencies = [];
+      timer.lapGroups = [];
       resetFrequencyCapture();
       elements["clock-status"].textContent = "Läuft";
       elements["mode-button"].disabled = true;
@@ -785,6 +912,7 @@ async function renderViewer(id) {
     const cardView = `<div class="result-list">
       ${results.map((result, index) => {
         const teamMembers = result.team_members || [];
+        const lapGroups = resultLapGroups(result);
         const displayName = teamMembers.length ? "Mannschaft" : result.participant_name;
         const details = teamMembers.length
           ? `<div class="result-team-members">${teamMembers.map((member) => `<span>${member.position}. ${escapeHtml(member.name)}</span>`).join("")}</div>`
@@ -793,7 +921,7 @@ async function renderViewer(id) {
         <div class="result-head"><span class="rank-badge">${index + 1}</span><div><strong>${escapeHtml(displayName)}</strong>${details}</div>
         <button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis ${index + 1} löschen" title="Löschen">${icon("trash")}</button></div>
         <div class="result-time">${formatTime(result.total_centiseconds)}</div>
-        <div class="result-segments">${result.segments.map((value, lap) => `<span><span class="result-lap-label">Lap ${lap + 1}${Number.isInteger(result.frequencies?.[lap]) ? `<small>${result.frequencies[lap]}/min</small>` : ""}</span><strong>${formatTime(value)}</strong></span>`).join("")}</div>
+        <div class="result-segments">${result.segments.map((value, lap) => `<span><span class="result-lap-label">${lapRangeLabel(lapGroups[lap])}${Number.isInteger(result.frequencies?.[lap]) ? `<small>${result.frequencies[lap]}/min</small>` : ""}</span><strong>${value === null ? "–" : formatTime(value)}</strong></span>`).join("")}</div>
       </article>`;
       }).join("")}</div>`;
     const tableView = `<div class="result-table-wrap"><table class="result-table">
@@ -801,11 +929,12 @@ async function renderViewer(id) {
       <thead><tr><th>Person</th><th>Offizielle Zeit</th>${Array.from({ length: lapCount }, (_, lap) => `<th>Lap ${lap + 1}</th>`).join("")}<th><span class="sr-only">Aktionen</span></th></tr></thead>
       <tbody>${results.map((result, index) => {
         const teamMembers = result.team_members || [];
+        const lapGroups = resultLapGroups(result);
         const displayName = teamMembers.length ? "Mannschaft" : result.participant_name;
         const details = teamMembers.length ? teamMembers.map((member) => `${member.position}. ${escapeHtml(member.name)}`).join("<br>") : `Jg. ${result.birth_year} · ${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}`;
         return `<tr><td><strong>${index + 1}. ${escapeHtml(displayName)}</strong><small>${details}</small></td>
         <td class="official-result">${formatTime(result.total_centiseconds)}</td>
-        ${Array.from({ length: lapCount }, (_, lap) => `<td>${result.segments[lap] ? `<span class="table-lap-value">${formatTime(result.segments[lap])}${Number.isInteger(result.frequencies?.[lap]) ? `<small>${result.frequencies[lap]}/min</small>` : ""}</span>` : "–"}</td>`).join("")}
+        ${Array.from({ length: lapCount }, (_, lap) => `<td>${result.segments[lap] ? `<span class="table-lap-value">${formatTime(result.segments[lap])}<small class="table-lap-label">${lapRangeLabel(lapGroups[lap])}</small>${Number.isInteger(result.frequencies?.[lap]) ? `<small>${result.frequencies[lap]}/min</small>` : ""}</span>` : "–"}</td>`).join("")}
         <td><button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis ${index + 1} löschen" title="Löschen">${icon("trash")}</button></td></tr>`;
       }).join("")}</tbody>
     </table></div>`;

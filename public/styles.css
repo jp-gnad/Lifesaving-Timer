@@ -207,8 +207,20 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 .choice-check .icon { width: 24px; height: 24px; }
 
 .save-actions { grid-template-columns: 1fr; }
+.review-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.time-mode-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; border: 1px solid var(--line); border-radius: 8px; padding: 2px; background: var(--surface-alt); }
+.time-mode-toggle button { min-height: 36px; border: 0; border-radius: 6px; padding: 6px 9px; background: transparent; color: var(--muted); font-size: 12px; font-weight: 700; cursor: pointer; }
+.time-mode-toggle button.active { background: var(--surface); color: var(--primary-dark); box-shadow: 0 1px 3px rgba(23, 32, 51, .12); }
+.glue-mode-toggle.active { border-color: #d5a11e; background: #fff9e8; color: #856404; }
+.glue-hint { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 10px; border-radius: 8px; padding: 8px 10px; background: #fff9e8; color: #725712; font-size: 12px; }
+.glue-hint .button { flex: 0 0 auto; min-height: 34px; padding: 5px 8px; }
 .edit-times { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 20px; }
 .review-lap-field > strong { font-size: 14px; }
+.review-lap-field.glued { border-radius: 8px; padding: 6px; background: #fff9e8; }
+.review-lap-title { min-height: 32px; display: flex; align-items: center; justify-content: space-between; gap: 5px; }
+.review-lap-title > strong { min-width: 0; font-size: 14px; }
+.glue-next { width: 32px; min-height: 32px; border: 1px solid #d5a11e; border-radius: 7px; padding: 5px; background: #fff9e8; color: #856404; cursor: pointer; display: grid; place-items: center; }
+.glue-next .icon { width: 18px; height: 18px; }
 .review-lap-inputs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .72fr); gap: 6px; }
 .review-lap-inputs label { min-width: 0; display: grid; gap: 3px; }
 .review-lap-inputs label > span { color: var(--muted); font-size: 11px; font-weight: 600; }
@@ -245,6 +257,7 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 .result-table .official-result { color: var(--text); font-weight: 800; }
 .table-lap-value { display: grid; justify-items: end; }
 .table-lap-value small { color: #a66d00; font-size: 11px; }
+.table-lap-value .table-lap-label { color: var(--muted); }
 .result-table tbody tr:last-child td { border-bottom: 0; }
 .result-table .icon-button { width: 38px; min-height: 38px; }
 .live-note { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
@@ -331,7 +344,7 @@ body.timer-page.timer-locked { position: fixed; inset: 0; width: 100%; height: 1
   .result-segments { grid-template-columns: 1fr; }
   .form-actions { grid-template-columns: 1fr; }
   .team-assignment { grid-template-columns: 1fr; }
-  .result-selection-head, .result-selection-row { grid-template-columns: minmax(104px, 1.15fr) repeat(2, minmax(0, 1fr)); gap: 5px; }
+  .result-selection-head, .result-selection-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
   .result-choice { min-height: 52px; }
   .result-choice-empty { min-height: 52px; }
   .viewer-list-heading { align-items: stretch; flex-direction: column; }

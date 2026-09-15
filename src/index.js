@@ -190,6 +190,7 @@ async function handleApi(request, env) {
       ...row,
       segments: JSON.parse(row.segments_json),
       frequencies: JSON.parse(row.frequencies_json || "[]"),
+      lap_groups: JSON.parse(row.lap_groups_json || "[]"),
       team_members: membersByResult.get(row.id) || [],
     })) });
   }
@@ -206,10 +207,24 @@ async function handleApi(request, env) {
       .bind(eventId, ...participantIds).all();
     if (assignedParticipants.length !== participantIds.length) throw new Error("Mindestens eine Person gehört nicht zu diesem Event.");
     if (!Array.isArray(body.segments) || !body.segments.length) throw new Error("Keine Zeiten vorhanden.");
-    const segments = body.segments.map(Number);
-    if (segments.some((value) => !Number.isInteger(value) || value <= 0)) throw new Error("Ungültige Abschnittszeit.");
-    if (discipline.flexible ? segments.length > discipline.laps : segments.length !== discipline.laps) {
-      throw new Error(`Für diese Disziplin werden ${discipline.laps} Abschnitte erwartet.`);
+    const segments = body.segments.map((value) => value === null ? null : Number(value));
+    if (segments.some((value) => value !== null && (!Number.isInteger(value) || value <= 0))) throw new Error("Ungültige Abschnittszeit.");
+    if (!segments.some((value) => Number.isInteger(value) && value > 0)) throw new Error("Keine Zeiten vorhanden.");
+    if (segments.length > discipline.laps) throw new Error(`Für diese Disziplin sind höchstens ${discipline.laps} Abschnitte erlaubt.`);
+    const lapGroups = body.lapGroups === undefined
+      ? segments.map((_, index) => [index + 1])
+      : body.lapGroups;
+    if (!Array.isArray(lapGroups) || lapGroups.length !== segments.length) throw new Error("Ungültige Lap-Bereiche.");
+    const coveredLaps = [];
+    lapGroups.forEach((group) => {
+      if (!Array.isArray(group) || !group.length || group.some((lap) => !Number.isInteger(lap) || lap < 1 || lap > discipline.laps)) {
+        throw new Error("Ungültige Lap-Bereiche.");
+      }
+      if (group.some((lap, index) => index > 0 && lap !== group[index - 1] + 1)) throw new Error("Es dürfen nur benachbarte Laps verbunden werden.");
+      coveredLaps.push(...group);
+    });
+    if ((!discipline.flexible && coveredLaps.length !== discipline.laps) || coveredLaps.some((lap, index) => lap !== index + 1) || coveredLaps.length > discipline.laps) {
+      throw new Error(`Für diese Disziplin müssen die Lap-Bereiche 1 bis ${discipline.laps} lückenlos abdecken.`);
     }
     const frequencies = body.frequencies === undefined
       ? segments.map(() => null)
@@ -218,15 +233,15 @@ async function handleApi(request, env) {
     if (frequencies.some((value) => value !== null && (!Number.isInteger(value) || value < 1 || value > 999))) {
       throw new Error("Frequenzen müssen ganze Zahlen von 1 bis 999 sein.");
     }
-    const segmentTotal = segments.reduce((sum, value) => sum + value, 0);
+    const segmentTotal = segments.reduce((sum, value) => sum + (value || 0), 0);
     const officialTime = body.officialTime == null ? segmentTotal : Number(body.officialTime);
     if (!Number.isInteger(officialTime) || officialTime <= 0) throw new Error("Ungültige offizielle Zeit.");
     if (officialTime > 86_400_000) throw new Error("Zeit ist zu lang.");
     const id = crypto.randomUUID();
     const resultInsert = env.DB.prepare(`
-      INSERT INTO results (id, event_id, participant_id, discipline, total_centiseconds, segments_json, frequencies_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(id, eventId, participantIds[0], body.discipline, officialTime, JSON.stringify(segments), JSON.stringify(frequencies));
+      INSERT INTO results (id, event_id, participant_id, discipline, total_centiseconds, segments_json, frequencies_json, lap_groups_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(id, eventId, participantIds[0], body.discipline, officialTime, JSON.stringify(segments), JSON.stringify(frequencies), JSON.stringify(lapGroups));
     if (discipline.team) {
       await env.DB.batch([resultInsert, ...participantIds.map((participantId, index) => env.DB.prepare(`
         INSERT INTO result_members (result_id, participant_id, position) VALUES (?, ?, ?)

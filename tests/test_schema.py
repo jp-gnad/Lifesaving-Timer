@@ -28,14 +28,42 @@ class SchemaTest(unittest.TestCase):
         )
         self.db.execute(
             """INSERT INTO results
-               (id, event_id, participant_id, discipline, total_centiseconds, segments_json, frequencies_json)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            ("result-1", "event-1", "person-1", "rescue50", 6400, "[3100,3254]", "[60,48]"),
+               (id, event_id, participant_id, discipline, total_centiseconds, segments_json, frequencies_json, lap_groups_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            ("result-1", "event-1", "person-1", "rescue50", 6400, "[3100,3254]", "[60,48]", "[[1],[2]]"),
         )
         saved = self.db.execute(
-            "SELECT total_centiseconds, segments_json, frequencies_json FROM results WHERE id = ?", ("result-1",)
+            "SELECT total_centiseconds, segments_json, frequencies_json, lap_groups_json FROM results WHERE id = ?", ("result-1",)
         ).fetchone()
-        self.assertEqual(saved, (6400, "[3100,3254]", "[60,48]"))
+        self.assertEqual(saved, (6400, "[3100,3254]", "[60,48]", "[[1],[2]]"))
+
+    def test_glued_adjacent_laps_can_be_saved(self):
+        self.db.execute("INSERT INTO events (id, name) VALUES (?, ?)", ("event-1", "Testevent"))
+        self.db.execute(
+            """INSERT INTO participants
+               (id, event_id, name, birth_year, age_group, gender, organization)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            ("person-1", "event-1", "Erika Muster", 2008, "AK 17/18", "female", "Teststadt"),
+        )
+        self.db.execute(
+            """INSERT INTO results
+               (id, event_id, participant_id, discipline, total_centiseconds, segments_json, frequencies_json, lap_groups_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "result-1",
+                "event-1",
+                "person-1",
+                "superLifesaver200",
+                7000,
+                "[1000,1000,2000,1000,1000,1000]",
+                "[60,60,null,60,60,60]",
+                "[[1],[2],[3,4],[5],[6],[7]]",
+            ),
+        )
+        saved = self.db.execute(
+            "SELECT segments_json, lap_groups_json FROM results WHERE id = ?", ("result-1",)
+        ).fetchone()
+        self.assertEqual(saved, ("[1000,1000,2000,1000,1000,1000]", "[[1],[2],[3,4],[5],[6],[7]]"))
 
     def test_deleting_event_cascades(self):
         self.db.execute("INSERT INTO events (id, name) VALUES (?, ?)", ("event-1", "Testevent"))

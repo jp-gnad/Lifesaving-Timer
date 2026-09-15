@@ -9,6 +9,7 @@
   <symbol id="flag" viewBox="0 0 24 24"><path d="M5 21V4m0 1h11l-2 3 2 3H5"/></symbol>
   <symbol id="location" viewBox="0 0 24 24"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></symbol>
   <symbol id="lap" viewBox="0 0 24 24"><path d="M6 4v16m12-16v16M9 7h6m-6 5h6m-6 5h6"/></symbol>
+  <symbol id="link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1"/></symbol>
   <symbol id="pencil" viewBox="0 0 24 24"><path d="m4 20 4.2-1 10.9-10.9a2.1 2.1 0 0 0-3-3L5.2 16 4 20Zm10.7-13.5 3 3"/></symbol>
   <symbol id="play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7V5Z"/></symbol>
   <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
