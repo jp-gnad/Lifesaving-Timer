@@ -599,6 +599,7 @@ async function renderTimer(id) {
     setTimerInteractionLock(false);
     setReviewInteractionLock(true);
     elements["timer-view"].hidden = true;
+    review.classList.toggle("normal-review", item.flexible);
     review.hidden = false;
     setDocumentTitle(`Ergebnis prüfen – ${event.name}`);
     review.innerHTML = `<div class="review-topbar"><button class="button secondary icon-button" id="close-review" aria-label="Zurück zum Timer">${icon("arrow-left")}</button><h1>Ergebnis prüfen</h1><button class="button danger icon-button" id="discard-review" aria-label="Messung löschen" title="Messung löschen">${icon("trash")}</button></div>
@@ -606,7 +607,7 @@ async function renderTimer(id) {
       <div class="review-tools"><div class="time-mode-toggle" role="group" aria-label="Zeitdarstellung"><button type="button" class="active" data-time-mode="segment" aria-pressed="true">Sekunden</button><button type="button" data-time-mode="cumulative" aria-pressed="false">Kumuliert</button></div><div class="review-mode-actions"><button class="button secondary small edit-mode-toggle" id="edit-mode" type="button" aria-pressed="false">${icon("pencil")} Bearbeiten</button><button class="button secondary small glue-mode-toggle" id="glue-mode" type="button" aria-pressed="false">${icon("link")} Kleben</button></div></div>
       <div class="glue-hint" id="glue-hint" hidden><span>Verbinde benachbarte Lap-Bereiche über das Kettensymbol.</span><button class="button secondary small" id="undo-glue" type="button" hidden>${icon("undo")} Rückgängig</button></div>
       <div class="edit-times" id="edit-times"></div>
-      <div class="review-time-summary"><div class="field official-time-field"><label for="official-time">Offizielle Zeit</label><input id="official-time" inputmode="decimal" placeholder="0:00,00" value="${timer.officialTime === null ? "" : formatTime(timer.officialTime)}" aria-describedby="save-error" readonly></div>
+      <div class="review-time-summary"><div class="field official-time-field"><label for="official-time">Offizielle Zeit</label><input id="official-time" inputmode="decimal" placeholder="0:00,00" value="${timer.officialTime === null ? "" : formatTime(timer.officialTime)}" aria-describedby="save-error"></div>
       <div class="total-summary"><span>Gestoppt</span><strong id="save-total" aria-live="polite">${formatTime(capturedTotal())}</strong></div></div>
       ${item.team ? `${assignmentMarkup}<button class="button secondary add-review-person" id="new-review-person" type="button">${icon("user-plus")} Neue Person</button>` : `<div class="review-assignment-row">${assignmentMarkup}<button class="button secondary add-review-person" id="new-review-person" type="button">${icon("user-plus")} Neu</button></div>`}
       <p class="form-error" id="save-error" role="alert"></p>
@@ -672,7 +673,6 @@ async function renderTimer(id) {
           : `<div class="review-lap-values"><strong>${displayedTime || "–"}</strong>${Number.isInteger(group.frequency) ? `<small>${group.frequency}/min</small>` : ""}<input class="segment-input" id="segment-${index}" type="hidden" value="${displayedTime}"><input class="frequency-input" id="frequency-${index}" type="hidden" value="${Number.isInteger(group.frequency) ? group.frequency : ""}"></div>`;
         return `<div class="field review-lap-field ${group.laps.length > 1 ? "glued" : ""} ${editMode ? "editable" : ""}"><div class="review-lap-title"><strong>${range}</strong>${glueButton}</div>${values}</div>`;
       }).join("");
-      officialInput.readOnly = !editMode;
       editTimes.querySelectorAll("input").forEach((input) => input.addEventListener("input", () => readCorrections(false)));
       editTimes.querySelectorAll(".glue-next").forEach((button) => button.addEventListener("click", () => {
         syncLapGroupsFromInputs();
