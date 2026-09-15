@@ -215,51 +215,51 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 .toast.show { opacity: 1; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 
-/* iOS-inspirierte Stoppuhransicht */
-body.timer-page { background: #000; color: #f5f5f7; }
+/* Helle, iOS-inspirierte Stoppuhransicht */
+body.timer-page { background: #f7f9fc; color: #172033; }
 body.timer-page.timer-locked { position: fixed; inset: 0; width: 100%; height: 100dvh; overflow: hidden; overscroll-behavior: none; }
 .timer-page.timer-locked .container { height: 100dvh; overflow: hidden; }
 .timer-page .site-header { display: none; }
-.timer-page .container { width: min(430px, 100%); min-height: 100dvh; padding: max(12px, env(safe-area-inset-top)) 16px max(32px, env(safe-area-inset-bottom)); background: #000; }
-.timer-page .loading { color: #8e8e93; }
+.timer-page .container { width: min(430px, 100%); min-height: 100dvh; padding: max(12px, env(safe-area-inset-top)) 16px max(32px, env(safe-area-inset-bottom)); background: #f7f9fc; }
+.timer-page .loading { color: #667085; }
 .timer-page .timer-topbar { grid-template-columns: 44px 1fr; margin-bottom: 0; }
 .timer-page .timer-topbar > .button { width: 44px; min-height: 44px; height: 44px; border: 0; border-radius: 50%; padding: 0; background: transparent; color: #0a84ff; }
-.timer-page .mode-button { min-height: 44px; border: 0; border-radius: 11px; padding: 5px 12px; background: #1c1c1e; color: #fff; }
-.timer-page .mode-button small { color: #8e8e93; }
+.timer-page .mode-button { min-height: 44px; border: 1px solid #d8dde7; border-radius: 11px; padding: 5px 12px; background: #fff; color: #172033; }
+.timer-page .mode-button small { color: #667085; }
 .timer-page .mode-button:disabled { opacity: .55; }
-.timer-page .clock-card { border: 0; border-radius: 0; padding: clamp(58px, 14vh, 110px) 0 0; background: #000; }
+.timer-page .clock-card { border: 0; border-radius: 0; padding: clamp(58px, 14vh, 110px) 0 0; background: #f7f9fc; }
 .timer-page .clock-status, .timer-page .progress-note { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
-.timer-page .clock { margin: 0 0 clamp(54px, 10vh, 84px); color: #fff; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif; font-size: clamp(55px, 17vw, 72px); font-weight: 300; letter-spacing: -.055em; }
+.timer-page .clock { margin: 0 0 clamp(54px, 10vh, 84px); color: #111827; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif; font-size: clamp(55px, 17vw, 72px); font-weight: 300; letter-spacing: -.055em; }
 .timer-page .timer-actions { display: flex; align-items: center; justify-content: space-between; padding: 0 7px; }
-.timer-page .timer-actions .timer-control { width: 86px; min-height: 86px; height: 86px; border: 3px solid #000; border-radius: 50%; padding: 0; background: rgba(48, 209, 88, .18); color: #30d158; outline: 2px solid rgba(48, 209, 88, .28); font-size: 15px; font-weight: 500; }
-.timer-page .timer-actions .timer-control.secondary { background: #2c2c2e; color: #fff; outline-color: #2c2c2e; }
-.timer-page .timer-actions .timer-control.danger { background: rgba(255, 69, 58, .18); color: #ff453a; outline-color: rgba(255, 69, 58, .28); }
-.timer-page .timer-actions .timer-control:disabled { color: #636366; opacity: 1; outline-color: #1c1c1e; background: #1c1c1e; }
+.timer-page .timer-actions .timer-control { width: 86px; min-height: 86px; height: 86px; border: 3px solid #f7f9fc; border-radius: 50%; padding: 0; background: #e4f6e9; color: #16833b; outline: 2px solid #b8e6c5; font-size: 15px; font-weight: 500; }
+.timer-page .timer-actions .timer-control.secondary { background: #e5e7eb; color: #172033; outline-color: #d1d5db; }
+.timer-page .timer-actions .timer-control.danger { background: #fde7e5; color: #d92d20; outline-color: #f5beb9; }
+.timer-page .timer-actions .timer-control:disabled { color: #98a2b3; opacity: 1; outline-color: #e4e7ec; background: #eef0f3; }
 .timer-page .timer-actions.final-lap { justify-content: center; }
 .timer-page .timer-actions.final-lap .timer-control { width: 136px; min-height: 136px; height: 136px; font-size: 20px; font-weight: 600; }
-.timer-page .lap-list.card { margin-top: 36px; border: 0; border-top: 1px solid #38383a; border-radius: 0; padding: 0; background: transparent; }
-.timer-page .lap-row { min-height: 44px; align-items: center; border-bottom-color: #38383a; padding: 6px 2px; color: #fff; font-size: 16px; }
-.timer-page .lap-row.fastest { color: #30d158; }
-.timer-page .lap-row.slowest { color: #ff453a; }
-.timer-page .review-view { min-height: calc(100dvh - 24px); color: #fff; }
+.timer-page .lap-list.card { margin-top: 36px; border: 0; border-top: 1px solid #d8dde7; border-radius: 0; padding: 0; background: transparent; }
+.timer-page .lap-row { min-height: 44px; align-items: center; border-bottom-color: #d8dde7; padding: 6px 2px; color: #172033; font-size: 16px; }
+.timer-page .lap-row.fastest { color: #16833b; }
+.timer-page .lap-row.slowest { color: #d92d20; }
+.timer-page .review-view { min-height: calc(100dvh - 24px); color: #172033; }
 .timer-page .review-topbar { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; gap: 10px; }
 .timer-page .review-topbar::after { content: ""; width: 44px; }
 .timer-page .review-topbar h1 { margin: 0; text-align: center; font-size: 22px; }
 .timer-page .review-topbar .button { width: 44px; min-height: 44px; border: 0; border-radius: 50%; padding: 0; background: transparent; color: #0a84ff; }
 .timer-page .review-content { padding-top: 34px; }
-.timer-page label { color: #f5f5f7; }
-.timer-page input, .timer-page select { border-color: #38383a; background: #1c1c1e; color: #fff; }
-.timer-page .total-summary { border-color: #38383a; color: #fff; }
-.timer-page .notice { border-color: #ffd60a; background: rgba(255, 214, 10, .12); color: #ffd60a; }
-.timer-page dialog { background: #1c1c1e; color: #fff; }
-.timer-page dialog::backdrop { background: rgba(0, 0, 0, .72); }
-.timer-page .discipline-choice { border-color: #38383a; background: #2c2c2e; color: #fff; }
-.timer-page .discipline-choice small { color: #98989d; }
-.timer-page .discipline-choice.selected { border-color: #0a84ff; background: rgba(10, 132, 255, .15); }
+.timer-page label { color: #172033; }
+.timer-page input, .timer-page select { border-color: #d8dde7; background: #fff; color: #172033; }
+.timer-page .total-summary { border-color: #d8dde7; color: #172033; }
+.timer-page .notice { border-color: #d5a11e; background: #fff9e8; color: #725712; }
+.timer-page dialog { background: #fff; color: #172033; }
+.timer-page dialog::backdrop { background: rgba(23, 32, 51, .45); }
+.timer-page .discipline-choice { border-color: #d8dde7; background: #f7f9fc; color: #172033; }
+.timer-page .discipline-choice small { color: #667085; }
+.timer-page .discipline-choice.selected { border-color: #0a84ff; background: #edf6ff; }
 .timer-page .choice-check { color: #0a84ff; }
-.timer-page .dialog-title-row .button { border-color: #38383a; background: #2c2c2e; color: #fff; }
+.timer-page .dialog-title-row .button { border-color: #d8dde7; background: #f7f9fc; color: #172033; }
 .timer-page .save-actions .button { background: #0a84ff; }
-.timer-page .toast { background: #2c2c2e; color: #fff; }
+.timer-page .toast { background: #172033; color: #fff; }
 
 @media (max-width: 430px) {
   .brand-mark { width: 32px; height: 32px; }
