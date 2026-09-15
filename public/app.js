@@ -445,6 +445,7 @@ async function renderTimer(id) {
   }
 
   function addSegment() {
+    if (timer.status !== "running" || timer.segments.length >= config().laps - 1) return false;
     const total = currentCs();
     const segment = total - capturedTotal();
     if (segment <= 0) return false;
@@ -605,7 +606,14 @@ async function renderTimer(id) {
       resetTimer();
       return;
     }
-    if (timer.status !== "running" || !addSegment()) return;
+    if (!addSegment()) return;
+    updateControls();
+  });
+
+  elements["timer-view"].addEventListener("click", (event) => {
+    if (event.clientY < document.documentElement.clientHeight / 2) return;
+    if (event.target.closest("button, a, input, select, dialog")) return;
+    if (!addSegment()) return;
     updateControls();
   });
 

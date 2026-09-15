@@ -252,7 +252,7 @@ body.timer-page { background: #f7f9fc; color: #172033; }
 body.timer-page.timer-locked { position: fixed; inset: 0; width: 100%; height: 100dvh; overflow: hidden; overscroll-behavior: none; }
 .timer-page.timer-locked .container { height: 100dvh; overflow: hidden; }
 .timer-page.timer-locked .timer-shell, .timer-page.timer-locked #timer-view { height: 100%; min-height: 0; }
-.timer-page.timer-locked #timer-view { display: flex; flex-direction: column; }
+.timer-page.timer-locked #timer-view { display: flex; flex-direction: column; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .timer-page.timer-locked .timer-topbar, .timer-page.timer-locked .clock-card { flex: 0 0 auto; }
 .timer-page .site-header { display: none; }
 .timer-page .container { width: min(430px, 100%); min-height: 100dvh; padding: max(12px, env(safe-area-inset-top)) 16px max(32px, env(safe-area-inset-bottom)); background: #f7f9fc; }
