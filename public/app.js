@@ -283,14 +283,24 @@ async function renderTimer(id) {
   const config = () => disciplines[timer.discipline];
 
   function drawClock() {
-    elements.clock.textContent = formatTime(currentCs());
+    const total = currentCs();
+    elements.clock.textContent = formatTime(total);
+    const liveLap = document.querySelector("#live-lap-time");
+    if (liveLap) liveLap.textContent = formatTime(total - capturedTotal());
     if (timer.status === "running") animationFrame = requestAnimationFrame(drawClock);
   }
 
   function renderLaps() {
-    elements["lap-list"].hidden = timer.segments.length === 0;
-    elements["lap-list"].innerHTML = timer.segments.length ? timer.segments.map((value, index) =>
-      `<div class="lap-row"><span>Lap ${index + 1}</span><strong>${formatTime(value)}</strong></div>`).join("") : "";
+    const hasLiveLap = timer.status === "running";
+    elements["lap-list"].hidden = timer.segments.length === 0 && !hasLiveLap;
+    const fastest = timer.segments.length > 1 ? Math.min(...timer.segments) : null;
+    const slowest = timer.segments.length > 1 ? Math.max(...timer.segments) : null;
+    const liveRow = hasLiveLap ? `<div class="lap-row current"><span>Runde ${timer.segments.length + 1}</span><strong id="live-lap-time">${formatTime(currentCs() - capturedTotal())}</strong></div>` : "";
+    const completedRows = timer.segments.map((value, index) => ({ value, index })).reverse().map(({ value, index }) => {
+      const lapClass = value === fastest && fastest !== slowest ? " fastest" : value === slowest && fastest !== slowest ? " slowest" : "";
+      return `<div class="lap-row${lapClass}"><span>Runde ${index + 1}</span><strong>${formatTime(value)}</strong></div>`;
+    }).join("");
+    elements["lap-list"].innerHTML = liveRow + completedRows;
   }
 
   function updateProgress() {
@@ -312,7 +322,7 @@ async function renderTimer(id) {
 
   function setControl(button, label, iconName, style, disabled = false) {
     button.className = `button timer-control ${style}`.trim();
-    button.innerHTML = `${icon(iconName)} ${label}`;
+    button.textContent = label;
     button.disabled = disabled;
   }
 
@@ -420,7 +430,7 @@ async function renderTimer(id) {
       timer.segments = [];
       elements["clock-status"].textContent = "Läuft";
       elements["mode-button"].disabled = true;
-      updateProgress(); updateControls(); drawClock();
+      renderLaps(); updateProgress(); updateControls(); drawClock();
       return;
     }
     if (timer.status === "running") {
@@ -527,6 +537,7 @@ async function renderRoute() {
   cancelAnimationFrame(animationFrame);
   app.innerHTML = `<div class="loading">Wird geladen …</div>`;
   const current = route();
+  document.body.classList.toggle("timer-page", current.page === "timer");
   try {
     if (current.page === "home") return await renderHome();
     if (!current.id) throw new Error("Die Adresse ist unvollständig.");
