@@ -304,12 +304,9 @@ async function renderTimer(id) {
   function renderLaps() {
     const hasLiveLap = timer.status === "running";
     elements["lap-list"].hidden = timer.segments.length === 0 && !hasLiveLap;
-    const fastest = timer.segments.length > 1 ? Math.min(...timer.segments) : null;
-    const slowest = timer.segments.length > 1 ? Math.max(...timer.segments) : null;
     const liveRow = hasLiveLap ? `<div class="lap-row current"><span>Runde ${timer.segments.length + 1}</span><strong id="live-lap-time">${formatTime(currentCs() - capturedTotal())}</strong></div>` : "";
     const completedRows = timer.segments.map((value, index) => ({ value, index })).reverse().map(({ value, index }) => {
-      const lapClass = value === fastest && fastest !== slowest ? " fastest" : value === slowest && fastest !== slowest ? " slowest" : "";
-      return `<div class="lap-row${lapClass}"><span>Runde ${index + 1}</span><strong>${formatTime(value)}</strong></div>`;
+      return `<div class="lap-row"><span>Runde ${index + 1}</span><strong>${formatTime(value)}</strong></div>`;
     }).join("");
     elements["lap-list"].innerHTML = liveRow + completedRows;
   }
@@ -396,12 +393,28 @@ async function renderTimer(id) {
       <div class="edit-times">${timer.segments.map((value, index) => `<div class="field"><label for="segment-${index}">Runde ${index + 1}</label><input class="segment-input" id="segment-${index}" inputmode="decimal" value="${formatTime(value)}" aria-describedby="save-error"></div>`).join("")}</div>
       <div class="total-summary"><span>Gesamtzeit</span><strong id="save-total">${formatTime(capturedTotal())}</strong></div>
       <div class="field"><label for="participant">Person</label><select id="participant"><option value="">Auswählen …</option>${participants.map((person) =>
-        `<option value="${person.id}">${escapeHtml(person.name)} · ${escapeHtml(person.age_group)} · ${escapeHtml(person.organization)}</option>`).join("")}</select></div>
-      ${participants.length ? "" : `<p class="notice">Zuerst eine Person im Event hinzufügen.</p>`}
+        `<option value="${person.id}">${escapeHtml(person.name)} · ${escapeHtml(person.age_group)} · ${escapeHtml(person.organization)}</option>`).join("")}</select>
+        <button class="button secondary" id="new-review-person" type="button">${icon("user-plus")} Neue Person</button></div>
       <p class="form-error" id="save-error" role="alert"></p>
-      <div class="form-actions save-actions"><button class="button" id="save-result" ${participants.length ? "" : "disabled"}>${icon("save")} Ergebnis speichern</button></div></div>`;
+      <div class="form-actions save-actions"><button class="button" id="save-result" ${participants.length ? "" : "disabled"}>${icon("save")} Ergebnis speichern</button></div></div>
+      <dialog id="review-person-dialog"><form class="dialog-body" id="review-person-form">
+        <div class="dialog-title-row"><h2>Neue Person</h2><button type="button" class="button secondary icon-button" data-close aria-label="Schließen">${icon("x")}</button></div>
+        <div class="form-grid">
+          <div class="field full"><label for="review-person-name">Name</label><input id="review-person-name" name="name" maxlength="120" autocomplete="name" required></div>
+          <div class="field"><label for="review-birth-year">Jahrgang</label><input id="review-birth-year" name="birthYear" type="number" min="1900" max="2200" inputmode="numeric" required></div>
+          <div class="field"><label for="review-age-group">Altersklasse</label><input id="review-age-group" name="ageGroup" maxlength="40" required placeholder="z. B. AK 15/16"></div>
+          <div class="field"><label for="review-gender">Geschlecht</label><select id="review-gender" name="gender" required><option value="female">Weiblich</option><option value="male">Männlich</option></select></div>
+          <div class="field"><label for="review-organization">Gliederung</label><input id="review-organization" name="organization" maxlength="120" required placeholder="Verein / Ortsgruppe"></div>
+        </div>
+        <p class="form-error" id="review-person-error" role="alert"></p>
+        <div class="form-actions"><button type="button" class="button secondary" data-close>Abbrechen</button><button type="submit" class="button">Hinzufügen</button></div>
+      </form></dialog>`;
 
     const inputs = [...review.querySelectorAll(".segment-input")];
+    const participantSelect = review.querySelector("#participant");
+    const saveResult = review.querySelector("#save-result");
+    const personDialog = review.querySelector("#review-person-dialog");
+    const personForm = review.querySelector("#review-person-form");
     function readCorrections(showError = false) {
       const values = inputs.map((input) => parseTime(input.value));
       const invalid = values.some((value) => value === null || value <= 0);
@@ -410,6 +423,36 @@ async function renderTimer(id) {
       return invalid ? null : values;
     }
     inputs.forEach((input) => input.addEventListener("input", () => readCorrections(false)));
+    bindDialogClose(personDialog);
+    review.querySelector("#new-review-person").addEventListener("click", () => {
+      personForm.reset();
+      review.querySelector("#review-person-error").textContent = "";
+      personDialog.showModal();
+      personForm.elements.name.focus();
+    });
+    personForm.addEventListener("submit", async (submitEvent) => {
+      submitEvent.preventDefault();
+      const submitButton = submitEvent.submitter;
+      try {
+        submitButton.disabled = true;
+        review.querySelector("#review-person-error").textContent = "";
+        const values = Object.fromEntries(new FormData(personForm));
+        const created = await api(`/events/${id}/participants`, { method: "POST", body: JSON.stringify(values) });
+        const person = { id: created.id, name: values.name, birth_year: Number(values.birthYear), age_group: values.ageGroup, gender: values.gender, organization: values.organization };
+        participants.push(person);
+        const option = document.createElement("option");
+        option.value = person.id;
+        option.textContent = `${person.name} · ${person.age_group} · ${person.organization}`;
+        participantSelect.append(option);
+        participantSelect.value = person.id;
+        saveResult.disabled = false;
+        personDialog.close();
+        showToast("Person wurde hinzugefügt und ausgewählt.");
+      } catch (err) {
+        review.querySelector("#review-person-error").textContent = err.message;
+        submitButton.disabled = false;
+      }
+    });
     review.querySelector("#close-review").addEventListener("click", () => {
       const corrections = readCorrections(false);
       if (corrections) {
@@ -423,9 +466,9 @@ async function renderTimer(id) {
       setDocumentTitle(`Timer – ${event.name}`);
       renderLaps(); updateProgress();
     });
-    review.querySelector("#save-result").addEventListener("click", async (event) => {
+    saveResult.addEventListener("click", async (event) => {
       const segments = readCorrections(true);
-      const participantId = review.querySelector("#participant").value;
+      const participantId = participantSelect.value;
       if (!segments || !participantId) {
         if (!participantId) review.querySelector("#save-error").textContent = "Bitte eine Person auswählen.";
         return;
