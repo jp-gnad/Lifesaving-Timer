@@ -19,7 +19,7 @@ let animationFrame = null;
 let toastTimer = null;
 
 function icon(name) {
-  return `<svg class="icon" aria-hidden="true"><use href="/icons.svg#${name}"></use></svg>`;
+  return `<svg class="icon" aria-hidden="true"><use href="/icons.svg?v=table-view#${name}"></use></svg>`;
 }
 
 function escapeHtml(value = "") {
@@ -347,9 +347,8 @@ async function renderTimer(id) {
     }
     if (timer.status === "running") {
       const lapLimitReached = timer.segments.length >= item.laps - 1;
-      const stopLocked = !item.flexible && !lapLimitReached;
       setControl(elements["left-action"], "Runde", "lap", "secondary", lapLimitReached);
-      setControl(elements["right-action"], "Stopp", "stop", "danger", stopLocked);
+      setControl(elements["right-action"], "Stopp", "stop", "danger", false);
       if (lapLimitReached) {
         elements["left-action"].hidden = true;
         actions.classList.add("final-lap");
@@ -566,6 +565,7 @@ async function renderViewer(id) {
   let loading = false;
   let allResults = [];
   let selected = null;
+  let resultView = "cards";
 
   const genderName = (gender) => gender === "female" ? "Weiblich" : "Männlich";
 
@@ -597,20 +597,35 @@ async function renderViewer(id) {
   function renderResultList() {
     const item = disciplines[selected.discipline];
     const results = allResults.filter((result) => result.discipline === selected.discipline && result.gender === selected.gender);
+    const lapCount = results.reduce((maximum, result) => Math.max(maximum, result.segments.length), 0);
+    const cardView = `<div class="result-list">
+      ${results.map((result, index) => `<article class="result-card">
+        <div class="result-head"><span class="rank-badge">${index + 1}</span><div><strong>${escapeHtml(result.participant_name)}</strong><div class="result-meta">Jg. ${result.birth_year} · ${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}</div></div>
+        <button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis von ${escapeHtml(result.participant_name)} löschen" title="Löschen">${icon("trash")}</button></div>
+        <div class="result-time">${formatTime(result.total_centiseconds)}</div>
+        <div class="result-segments">${result.segments.map((value, lap) => `<span>Lap ${lap + 1}<strong>${formatTime(value)}</strong></span>`).join("")}</div>
+      </article>`).join("")}</div>`;
+    const tableView = `<div class="result-table-wrap"><table class="result-table">
+      <caption class="sr-only">Ergebnisse ${escapeHtml(item.name)}, ${genderName(selected.gender)}</caption>
+      <thead><tr><th>Person</th><th>Offizielle Zeit</th>${Array.from({ length: lapCount }, (_, lap) => `<th>Lap ${lap + 1}</th>`).join("")}<th><span class="sr-only">Aktionen</span></th></tr></thead>
+      <tbody>${results.map((result, index) => `<tr><td><strong>${index + 1}. ${escapeHtml(result.participant_name)}</strong><small>Jg. ${result.birth_year} · ${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}</small></td>
+        <td class="official-result">${formatTime(result.total_centiseconds)}</td>
+        ${Array.from({ length: lapCount }, (_, lap) => `<td>${result.segments[lap] ? formatTime(result.segments[lap]) : "–"}</td>`).join("")}
+        <td><button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis von ${escapeHtml(result.participant_name)} löschen" title="Löschen">${icon("trash")}</button></td></tr>`).join("")}</tbody>
+    </table></div>`;
     resultsRoot.innerHTML = `<button class="viewer-list-back" id="viewer-list-back">${icon("arrow-left")} Übersicht</button>
-      <div class="viewer-list-title"><p class="eyebrow">${genderName(selected.gender)}</p><h2>${escapeHtml(item.name)}</h2></div>
-      ${results.length ? `<div class="result-list">
-        ${results.map((result, index) => `<article class="result-card">
-          <div class="result-head"><span class="rank-badge">${index + 1}</span><div><strong>${escapeHtml(result.participant_name)}</strong><div class="result-meta">Jg. ${result.birth_year} · ${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}</div></div>
-          <button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis von ${escapeHtml(result.participant_name)} löschen" title="Löschen">${icon("trash")}</button></div>
-          <div class="result-time">${formatTime(result.total_centiseconds)}</div>
-          <div class="result-segments">${result.segments.map((value, lap) => `<span>Lap ${lap + 1}<strong>${formatTime(value)}</strong></span>`).join("")}</div>
-        </article>`).join("")}</div>` : `<div class="empty">Noch keine Ergebnisse.</div>`}`;
+      <div class="viewer-list-heading"><div class="viewer-list-title"><p class="eyebrow">${genderName(selected.gender)}</p><h2>${escapeHtml(item.name)}</h2></div>
+        <div class="result-view-toggle" role="group" aria-label="Darstellung"><button data-result-view="cards" class="${resultView === "cards" ? "active" : ""}" aria-pressed="${resultView === "cards"}">${icon("cards")} Karten</button><button data-result-view="table" class="${resultView === "table" ? "active" : ""}" aria-pressed="${resultView === "table"}">${icon("table")} Tabelle</button></div></div>
+      ${results.length ? (resultView === "table" ? tableView : cardView) : `<div class="empty">Noch keine Ergebnisse.</div>`}`;
     resultsRoot.querySelector("#viewer-list-back").addEventListener("click", () => {
       selected = null;
       renderContent();
       window.scrollTo(0, 0);
     });
+    resultsRoot.querySelectorAll("[data-result-view]").forEach((button) => button.addEventListener("click", () => {
+      resultView = button.dataset.resultView;
+      renderResultList();
+    }));
     resultsRoot.querySelectorAll(".delete-result").forEach((button) => button.addEventListener("click", async () => {
       if (!confirm("Dieses Ergebnis unwiderruflich löschen?")) return;
       try { await api(`/events/${id}/results/${button.dataset.id}`, { method: "DELETE" }); showToast("Ergebnis wurde gelöscht."); await loadResults(); }
