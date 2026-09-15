@@ -424,13 +424,16 @@ async function renderTimer(id) {
       return;
     }
     if (timer.status === "running") {
-      timer.displayed = currentCs();
-      if (!addSegment()) return;
+      const finalTime = currentCs();
+      const finalSegment = finalTime - capturedTotal();
+      if (finalSegment <= 0) return;
+      timer.displayed = finalTime;
       timer.status = "stopped";
+      timer.segments.push(finalSegment);
       cancelAnimationFrame(animationFrame);
       elements.clock.textContent = formatTime(timer.displayed);
       elements["clock-status"].textContent = "Gestoppt";
-      updateProgress(); updateControls(); renderSavePanel();
+      renderLaps(); updateProgress(); updateControls(); renderSavePanel();
       return;
     }
     timer.segments.pop();
