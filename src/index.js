@@ -111,6 +111,23 @@ async function handleApi(request, env) {
     return json({ id }, 201);
   }
 
+  if (parts[3] === "participants" && parts[4] && parts.length === 5 && method === "PATCH") {
+    const body = await bodyOf(request);
+    const name = cleanText(body.name, "Name");
+    const birthYear = Number(body.birthYear);
+    if (!Number.isInteger(birthYear) || birthYear < 1900 || birthYear > 2200) throw new Error("Ungültiger Jahrgang.");
+    const ageGroup = cleanText(body.ageGroup, "Altersklasse", 40);
+    if (!['male', 'female'].includes(body.gender)) throw new Error("Ungültiges Geschlecht.");
+    const organization = cleanText(body.organization, "Gliederung");
+    const result = await env.DB.prepare(`
+      UPDATE participants
+      SET name = ?, birth_year = ?, age_group = ?, gender = ?, organization = ?
+      WHERE id = ? AND event_id = ?
+    `).bind(name, birthYear, ageGroup, body.gender, organization, parts[4], eventId).run();
+    if (!result.meta.changes) return fail("Person nicht gefunden.", 404);
+    return json({ ok: true });
+  }
+
   if (parts[3] === "participants" && parts[4] && parts.length === 5 && method === "DELETE") {
     const result = await env.DB.prepare("DELETE FROM participants WHERE id = ? AND event_id = ?")
       .bind(parts[4], eventId).run();

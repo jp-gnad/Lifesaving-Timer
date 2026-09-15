@@ -168,12 +168,12 @@ async function renderEvent(id) {
       <div class="section-head"><h2 id="people-heading">Personen</h2><button class="button secondary" id="new-person">${icon("user-plus")} Hinzufügen</button></div>
       ${participants.length ? `<div class="person-list">
         ${participants.map((person) => `<article class="person-card">
-          <div class="person-head"><strong>${escapeHtml(person.name)}</strong><button class="button danger small icon-button delete-person" data-id="${person.id}" data-name="${escapeHtml(person.name)}" data-results="${person.result_count}" aria-label="${escapeHtml(person.name)} löschen" title="Löschen">${icon("trash")}</button></div>
+          <div class="person-head"><strong>${escapeHtml(person.name)}</strong><div class="person-actions"><button class="button secondary small icon-button edit-person" data-id="${person.id}" aria-label="${escapeHtml(person.name)} bearbeiten" title="Bearbeiten">${icon("pencil")}</button><button class="button danger small icon-button delete-person" data-id="${person.id}" data-name="${escapeHtml(person.name)}" data-results="${person.result_count}" aria-label="${escapeHtml(person.name)} löschen" title="Löschen">${icon("trash")}</button></div></div>
           <div class="person-details"><span>${person.gender === "male" ? "Männlich" : "Weiblich"} · Jg. ${person.birth_year} · ${escapeHtml(person.age_group)}</span><span>${escapeHtml(person.organization)}</span><span>${person.result_count} ${person.result_count === 1 ? "Ergebnis" : "Ergebnisse"}</span></div>
         </article>`).join("")}</div>` : `<div class="empty">Noch keine Personen.</div>`}
     </section>
     <dialog id="person-dialog"><form class="dialog-body" id="person-form">
-      <h2>Person hinzufügen</h2><div class="form-grid">
+      <h2 id="person-dialog-title">Person hinzufügen</h2><div class="form-grid">
         <div class="field full"><label for="person-name">Name</label><input id="person-name" name="name" maxlength="120" autocomplete="name" required></div>
         <div class="field"><label for="birth-year">Jahrgang</label><input id="birth-year" name="birthYear" type="number" min="1900" max="2200" inputmode="numeric" required></div>
         <div class="field"><label for="age-group">Altersklasse</label><input id="age-group" name="ageGroup" maxlength="40" required placeholder="z. B. AK 15/16"></div>
@@ -184,16 +184,38 @@ async function renderEvent(id) {
     </form></dialog>`;
 
   const dialog = document.querySelector("#person-dialog");
+  const personForm = document.querySelector("#person-form");
+  const personDialogTitle = document.querySelector("#person-dialog-title");
   bindDialogClose(dialog);
-  document.querySelector("#new-person").addEventListener("click", () => openDialog("#person-dialog"));
-  document.querySelector("#person-form").addEventListener("submit", async (submitEvent) => {
+  document.querySelector("#new-person").addEventListener("click", () => {
+    personForm.reset();
+    personForm.dataset.editId = "";
+    personDialogTitle.textContent = "Person hinzufügen";
+    document.querySelector("#person-error").textContent = "";
+    openDialog("#person-dialog");
+  });
+  document.querySelectorAll(".edit-person").forEach((button) => button.addEventListener("click", () => {
+    const person = participants.find((item) => item.id === button.dataset.id);
+    if (!person) return;
+    personForm.dataset.editId = person.id;
+    personDialogTitle.textContent = "Person bearbeiten";
+    personForm.elements.name.value = person.name;
+    personForm.elements.birthYear.value = person.birth_year;
+    personForm.elements.ageGroup.value = person.age_group;
+    personForm.elements.gender.value = person.gender;
+    personForm.elements.organization.value = person.organization;
+    document.querySelector("#person-error").textContent = "";
+    openDialog("#person-dialog");
+  }));
+  personForm.addEventListener("submit", async (submitEvent) => {
     submitEvent.preventDefault();
     const button = submitEvent.submitter;
     try {
       button.disabled = true;
       const values = Object.fromEntries(new FormData(submitEvent.currentTarget));
-      await api(`/events/${id}/participants`, { method: "POST", body: JSON.stringify(values) });
-      showToast("Person wurde hinzugefügt.");
+      const editId = submitEvent.currentTarget.dataset.editId;
+      await api(`/events/${id}/participants${editId ? `/${editId}` : ""}`, { method: editId ? "PATCH" : "POST", body: JSON.stringify(values) });
+      showToast(editId ? "Person wurde aktualisiert." : "Person wurde hinzugefügt.");
       await renderEvent(id);
     } catch (err) {
       document.querySelector("#person-error").textContent = err.message;

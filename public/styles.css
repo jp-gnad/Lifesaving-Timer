@@ -155,6 +155,7 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 .person-card, .result-card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 15px; }
 .person-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .person-head strong { font-size: 17px; }
+.person-actions { display: flex; gap: 7px; }
 .person-details { display: grid; gap: 3px; margin-top: 8px; color: var(--muted); font-size: 14px; }
 .result-head { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 11px; }
 .rank-badge { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: var(--surface-alt); font-weight: 800; }

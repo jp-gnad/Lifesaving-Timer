@@ -5,7 +5,7 @@ Eine bewusst einfache, helle Web-App zur Zeitnahme im Rettungssport. Events, Per
 ## Funktionen
 
 - Öffentliche Eventübersicht
-- Personen mit Name, Jahrgang, Altersklasse, Geschlecht und Gliederung
+- Personen mit Name, Jahrgang, Altersklasse, Geschlecht und Gliederung anlegen und bearbeiten
 - Einzelzeitnahme auf mehreren Geräten gleichzeitig
 - Separate Tasten für Start, Lap und Stopp
 - Letzten Lap zurücknehmen, Versuch verwerfen und Abschnittszeiten korrigieren
