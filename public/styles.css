@@ -228,21 +228,21 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 .choice-check .icon { width: 24px; height: 24px; }
 
 .save-actions { grid-template-columns: 1fr; }
-.review-tools { display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 8px; }
+.review-tools { display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 15px; }
 .review-mode-actions { display: flex; min-width: 0; gap: 3px; }
-.review-mode-actions .button { min-height: 34px; padding: 5px 6px; gap: 4px; font-size: 10.5px; white-space: nowrap; }
+.review-mode-actions .button { min-height: 34px; padding: 5px 6px; gap: 4px; font-size: 10.5px; font-weight: 600; white-space: nowrap; }
 .time-mode-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; border: 1px solid var(--line); border-radius: 8px; padding: 2px; background: var(--surface-alt); }
-.time-mode-toggle button { min-height: 32px; border: 0; border-radius: 6px; padding: 4px 5px; background: transparent; color: var(--muted); font-size: 10.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.time-mode-toggle button { min-height: 32px; border: 0; border-radius: 6px; padding: 4px 5px; background: transparent; color: var(--muted); font-size: 10.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .time-mode-toggle button.active { background: var(--surface); color: var(--primary-dark); box-shadow: 0 1px 3px rgba(23, 32, 51, .12); }
 .edit-mode-toggle.active { border-color: #8eb9f3; background: #edf6ff; color: var(--primary-dark); }
 .glue-mode-toggle.active { border-color: #d5a11e; background: #fff9e8; color: #856404; }
 .glue-hint { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 10px; border-radius: 8px; padding: 8px 10px; background: #fff9e8; color: #725712; font-size: 12px; }
 .glue-hint .button { flex: 0 0 auto; min-height: 34px; padding: 5px 8px; }
-.edit-times { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 8px; margin-bottom: 9px; }
+.edit-times { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 8px; margin-bottom: 19px; }
 .review-lap-field > strong { font-size: 14px; }
 .review-lap-field.glued { border-radius: 8px; padding: 6px; background: #fff9e8; }
 .review-lap-title { min-height: 24px; display: flex; align-items: center; justify-content: space-between; gap: 5px; }
-.review-lap-title > strong { min-width: 0; font-size: 13px; }
+.review-lap-title > strong { min-width: 0; font-size: 13px; font-weight: 600; }
 .glue-next { width: 32px; min-height: 32px; border: 1px solid #d5a11e; border-radius: 7px; padding: 5px; background: #fff9e8; color: #856404; cursor: pointer; display: grid; place-items: center; }
 .glue-next .icon { width: 18px; height: 18px; }
 .review-lap-inputs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .72fr); gap: 6px; }
@@ -251,16 +251,17 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 .review-lap-field:not(.editable) { min-height: 38px; display: flex; align-items: center; justify-content: space-between; gap: 6px; border-radius: 7px; padding: 5px 7px; background: var(--surface-alt); }
 .review-lap-field:not(.editable) .review-lap-title { min-height: 0; }
 .review-lap-values { min-width: 0; display: flex; align-items: baseline; justify-content: flex-end; gap: 5px; font-variant-numeric: tabular-nums; }
-.review-lap-values strong { font-size: 13px; }
+.review-lap-values strong { font-size: 13px; font-weight: 600; }
 .review-lap-values small { color: #a66d00; font-size: 10px; font-weight: 700; white-space: nowrap; }
 .official-time-field input[readonly] { border-color: transparent; background: var(--surface-alt); color: var(--text); cursor: default; }
 .review-lap-field.editable input { border-color: #8eb9f3; background: #fff; }
-.review-time-summary { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: end; gap: 10px; margin: 8px 0; }
+.review-time-summary { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: end; gap: 10px; margin: 0 0 18px; }
 .total-summary { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-top: 1px solid var(--line); font-size: 18px; }
 .total-summary strong { font-size: 24px; font-variant-numeric: tabular-nums; }
 .official-time-field { margin: 16px 0; }
 .review-assignment-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; }
-.review-assignment-row .add-review-person { width: auto; margin: 0; padding-right: 12px; padding-left: 12px; }
+.review-assignment-row select, .review-assignment-row .add-review-person { height: 40px; min-height: 40px; }
+.review-assignment-row .add-review-person { width: auto; margin: 0; padding: 0 12px; font-weight: 600; }
 .team-assignment { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; border: 0; padding: 0; }
 .team-assignment legend { grid-column: 1 / -1; margin-bottom: 7px; padding: 0; font-size: 14px; font-weight: 700; }
 .add-review-person { width: 100%; margin-top: 10px; }
@@ -351,13 +352,14 @@ body.timer-page.review-active { position: fixed; inset: 0; width: 100%; height: 
 .timer-page .review-content { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 8px 0 max(12px, env(safe-area-inset-bottom)); }
 .timer-page .review-content .field { min-width: 0; gap: 4px; }
 .timer-page .review-content input, .timer-page .review-content select { min-width: 0; min-height: 40px; padding: 7px 9px; text-overflow: ellipsis; }
-.timer-page .edit-times { gap: 6px 8px; margin-bottom: 8px; }
+.timer-page .edit-times { gap: 6px 8px; margin-bottom: 19px; }
 .timer-page .total-summary { min-height: 40px; border: 0; border-radius: 8px; padding: 6px 9px; background: var(--surface-alt); font-size: 12px; }
-.timer-page .total-summary strong { font-size: 17px; }
+.timer-page .total-summary strong { font-size: 17px; font-weight: 650; }
 .timer-page .official-time-field { margin: 0; }
 .timer-page .team-assignment { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 10px; }
 .timer-page .team-assignment legend { margin-bottom: 3px; }
 .timer-page .add-review-person { min-height: 40px; margin-top: 7px; }
+.timer-page .review-assignment-row .add-review-person { height: 40px; margin-top: 0; }
 .timer-page .save-actions { margin-top: 8px; }
 .timer-page #save-error:empty { display: none; }
 .timer-page label { color: #172033; }
