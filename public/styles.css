@@ -127,7 +127,7 @@ h3 { font-size: 17px; }
 .button:disabled { opacity: .45; cursor: not-allowed; }
 .button.small { min-height: 42px; padding: 8px 12px; font-size: 14px; }
 .button.icon-button { width: 42px; padding: 8px; }
-.button[hidden] { display: none; }
+[hidden] { display: none !important; }
 
 form { margin: 0; }
 .form-grid { display: grid; grid-template-columns: 1fr; gap: 15px; }
@@ -200,7 +200,6 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 .choice-check { width: 24px; height: 24px; color: var(--primary); }
 .choice-check .icon { width: 24px; height: 24px; }
 
-.save-panel { margin-top: 20px; }
 .save-actions { grid-template-columns: 1fr; }
 .edit-times { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 20px; }
 .total-summary { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-top: 1px solid var(--line); font-size: 18px; }
@@ -234,12 +233,17 @@ body.timer-page { background: #000; color: #f5f5f7; }
 .timer-page .timer-actions .timer-control.secondary { background: #2c2c2e; color: #fff; outline-color: #2c2c2e; }
 .timer-page .timer-actions .timer-control.danger { background: rgba(255, 69, 58, .18); color: #ff453a; outline-color: rgba(255, 69, 58, .28); }
 .timer-page .timer-actions .timer-control:disabled { color: #636366; opacity: 1; outline-color: #1c1c1e; background: #1c1c1e; }
+.timer-page .save-attempt { width: min(240px, 100%); margin: 30px auto 0; background: #0a84ff; }
 .timer-page .lap-list.card { margin-top: 36px; border: 0; border-top: 1px solid #38383a; border-radius: 0; padding: 0; background: transparent; }
 .timer-page .lap-row { min-height: 52px; align-items: center; border-bottom-color: #38383a; padding: 10px 2px; color: #fff; font-size: 16px; }
 .timer-page .lap-row.fastest { color: #30d158; }
 .timer-page .lap-row.slowest { color: #ff453a; }
-.timer-page .save-panel.card { margin-top: 28px; border: 0; border-top: 1px solid #38383a; border-radius: 0; padding: 24px 0 0; background: transparent; color: #fff; }
-.timer-page .save-panel h2 { color: #fff; }
+.timer-page .review-view { min-height: calc(100dvh - 24px); color: #fff; }
+.timer-page .review-topbar { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; gap: 10px; }
+.timer-page .review-topbar::after { content: ""; width: 44px; }
+.timer-page .review-topbar h1 { margin: 0; text-align: center; font-size: 22px; }
+.timer-page .review-topbar .button { width: 44px; min-height: 44px; border: 0; border-radius: 50%; padding: 0; background: transparent; color: #0a84ff; }
+.timer-page .review-content { padding-top: 34px; }
 .timer-page label { color: #f5f5f7; }
 .timer-page input, .timer-page select { border-color: #38383a; background: #1c1c1e; color: #fff; }
 .timer-page .total-summary { border-color: #38383a; color: #fff; }

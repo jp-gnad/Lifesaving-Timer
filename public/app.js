@@ -257,6 +257,7 @@ async function renderTimer(id) {
 
   app.innerHTML = `
     <div class="timer-shell">
+      <div id="timer-view">
       <div class="timer-topbar">
         <a class="button secondary icon-button" href="#/event/${id}" aria-label="Zurück zu ${escapeHtml(event.name)}">${icon("arrow-left")}</a>
         <button class="mode-button" id="mode-button" aria-haspopup="dialog"><span><strong id="mode-name">Normal</strong><small id="mode-laps">max. 20 Laps</small></span>${icon("chevron-down")}</button>
@@ -268,15 +269,17 @@ async function renderTimer(id) {
           <button class="button secondary timer-control" id="left-action" disabled>${icon("trash")} Löschen</button>
           <button class="button timer-control" id="right-action">${icon("play")} Start</button>
         </div>
+        <button class="button save-attempt" id="open-review" hidden>${icon("save")} Speichern</button>
       </section>
       <div class="card lap-list" id="lap-list" hidden></div>
-      <section class="card save-panel" id="save-panel" hidden></section>
       <dialog id="discipline-dialog"><div class="dialog-body mode-dialog-body"><div class="dialog-title-row"><h2>Stoppmodus</h2><button class="button secondary icon-button" id="close-mode" aria-label="Menü schließen">${icon("x")}</button></div>
         <div class="discipline-list">${Object.entries(disciplines).map(([disciplineId, item]) => `<button class="discipline-choice" data-discipline="${disciplineId}"><span><strong>${item.name}</strong><small>${item.flexible ? "max. " : ""}${item.laps} Laps</small></span><span class="choice-check">${disciplineId === "normal" ? icon("check") : ""}</span></button>`).join("")}</div>
       </div></dialog>
+      </div>
+      <section class="review-view" id="review-view" hidden></section>
     </div>`;
 
-  const elements = Object.fromEntries(["mode-button", "mode-name", "mode-laps", "discipline-dialog", "clock-status", "clock", "left-action", "right-action", "progress", "lap-list", "save-panel"].map((key) => [key, document.querySelector(`#${key}`)]));
+  const elements = Object.fromEntries(["timer-view", "review-view", "open-review", "mode-button", "mode-name", "mode-laps", "discipline-dialog", "clock-status", "clock", "left-action", "right-action", "progress", "lap-list"].map((key) => [key, document.querySelector(`#${key}`)]));
 
   const currentCs = () => timer.status === "running" ? timer.displayed + Math.floor((performance.now() - timer.startedAt) / 10) : timer.displayed;
   const capturedTotal = () => timer.segments.reduce((sum, value) => sum + value, 0);
@@ -350,7 +353,11 @@ async function renderTimer(id) {
     elements.clock.textContent = "00:00,00";
     elements["clock-status"].textContent = "Bereit";
     elements["mode-button"].disabled = false;
-    elements["save-panel"].hidden = true;
+    elements["open-review"].hidden = true;
+    elements["timer-view"].hidden = false;
+    elements["review-view"].hidden = true;
+    elements["review-view"].innerHTML = "";
+    setDocumentTitle(`Timer – ${event.name}`);
     renderLaps(); updateProgress(); updateControls();
   }
 
@@ -363,32 +370,47 @@ async function renderTimer(id) {
     return true;
   }
 
-  function renderSavePanel() {
-    const panel = elements["save-panel"];
-    panel.hidden = false;
-    panel.innerHTML = `<h2>Ergebnis</h2>
-      <div class="edit-times">${timer.segments.map((value, index) => `<div class="field"><label for="segment-${index}">Lap ${index + 1}</label><input class="segment-input" id="segment-${index}" inputmode="decimal" value="${formatTime(value)}" aria-describedby="save-error"></div>`).join("")}</div>
+  function showReview() {
+    const review = elements["review-view"];
+    elements["timer-view"].hidden = true;
+    review.hidden = false;
+    setDocumentTitle(`Ergebnis prüfen – ${event.name}`);
+    review.innerHTML = `<div class="review-topbar"><button class="button secondary icon-button" id="close-review" aria-label="Zurück zum Timer">${icon("arrow-left")}</button><h1>Ergebnis prüfen</h1></div>
+      <div class="review-content">
+      <div class="edit-times">${timer.segments.map((value, index) => `<div class="field"><label for="segment-${index}">Runde ${index + 1}</label><input class="segment-input" id="segment-${index}" inputmode="decimal" value="${formatTime(value)}" aria-describedby="save-error"></div>`).join("")}</div>
       <div class="total-summary"><span>Gesamtzeit</span><strong id="save-total">${formatTime(capturedTotal())}</strong></div>
       <div class="field"><label for="participant">Person</label><select id="participant"><option value="">Auswählen …</option>${participants.map((person) =>
         `<option value="${person.id}">${escapeHtml(person.name)} · ${escapeHtml(person.age_group)} · ${escapeHtml(person.organization)}</option>`).join("")}</select></div>
       ${participants.length ? "" : `<p class="notice">Zuerst eine Person im Event hinzufügen.</p>`}
       <p class="form-error" id="save-error" role="alert"></p>
-      <div class="form-actions save-actions"><button class="button" id="save-result" ${participants.length ? "" : "disabled"}>${icon("save")} Speichern</button></div>`;
+      <div class="form-actions save-actions"><button class="button" id="save-result" ${participants.length ? "" : "disabled"}>${icon("save")} Ergebnis speichern</button></div></div>`;
 
-    const inputs = [...panel.querySelectorAll(".segment-input")];
+    const inputs = [...review.querySelectorAll(".segment-input")];
     function readCorrections(showError = false) {
       const values = inputs.map((input) => parseTime(input.value));
       const invalid = values.some((value) => value === null || value <= 0);
-      panel.querySelector("#save-error").textContent = showError && invalid ? "Bitte alle Zeiten als mm:ss,00 eingeben." : "";
-      panel.querySelector("#save-total").textContent = invalid ? "–" : formatTime(values.reduce((sum, value) => sum + value, 0));
+      review.querySelector("#save-error").textContent = showError && invalid ? "Bitte alle Zeiten als mm:ss,00 eingeben." : "";
+      review.querySelector("#save-total").textContent = invalid ? "–" : formatTime(values.reduce((sum, value) => sum + value, 0));
       return invalid ? null : values;
     }
     inputs.forEach((input) => input.addEventListener("input", () => readCorrections(false)));
-    panel.querySelector("#save-result").addEventListener("click", async (event) => {
+    review.querySelector("#close-review").addEventListener("click", () => {
+      const corrections = readCorrections(false);
+      if (corrections) {
+        timer.segments = corrections;
+        timer.displayed = corrections.reduce((sum, value) => sum + value, 0);
+        elements.clock.textContent = formatTime(timer.displayed);
+      }
+      review.hidden = true;
+      elements["timer-view"].hidden = false;
+      setDocumentTitle(`Timer – ${event.name}`);
+      renderLaps(); updateProgress();
+    });
+    review.querySelector("#save-result").addEventListener("click", async (event) => {
       const segments = readCorrections(true);
-      const participantId = panel.querySelector("#participant").value;
+      const participantId = review.querySelector("#participant").value;
       if (!segments || !participantId) {
-        if (!participantId) panel.querySelector("#save-error").textContent = "Bitte eine Person auswählen.";
+        if (!participantId) review.querySelector("#save-error").textContent = "Bitte eine Person auswählen.";
         return;
       }
       try {
@@ -397,11 +419,11 @@ async function renderTimer(id) {
         showToast("Ergebnis wurde gespeichert. Bereit für die nächste Person.");
         resetTimer();
       } catch (err) {
-        panel.querySelector("#save-error").textContent = err.message;
+        review.querySelector("#save-error").textContent = err.message;
         event.currentTarget.disabled = false;
       }
     });
-    panel.scrollIntoView({ behavior: "auto", block: "nearest" });
+    window.scrollTo(0, 0);
   }
 
   bindDialogClose(elements["discipline-dialog"]);
@@ -412,6 +434,7 @@ async function renderTimer(id) {
     updateMode();
     elements["discipline-dialog"].close();
   }));
+  elements["open-review"].addEventListener("click", showReview);
 
   elements["left-action"].addEventListener("click", () => {
     if (timer.status === "stopped") {
@@ -443,14 +466,15 @@ async function renderTimer(id) {
       cancelAnimationFrame(animationFrame);
       elements.clock.textContent = formatTime(timer.displayed);
       elements["clock-status"].textContent = "Gestoppt";
-      renderLaps(); updateProgress(); updateControls(); renderSavePanel();
+      elements["open-review"].hidden = false;
+      renderLaps(); updateProgress(); updateControls();
       return;
     }
     timer.segments.pop();
     timer.status = "running";
     timer.startedAt = performance.now();
     elements["clock-status"].textContent = "Läuft";
-    elements["save-panel"].hidden = true;
+    elements["open-review"].hidden = true;
     renderLaps(); updateProgress(); updateControls(); drawClock();
   });
 
