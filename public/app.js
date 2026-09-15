@@ -16,6 +16,10 @@ let cooldownTimer = null;
 let animationFrame = null;
 let toastTimer = null;
 
+function icon(name) {
+  return `<svg class="icon" aria-hidden="true"><use href="/icons.svg#${name}"></use></svg>`;
+}
+
 function escapeHtml(value = "") {
   return String(value).replace(/[&<>'"]/g, (char) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;",
@@ -75,9 +79,9 @@ function setDocumentTitle(title) {
 
 function renderError(error, back = "#/", backText = "Zurück zur Übersicht") {
   app.innerHTML = `
-    <a class="back" href="${back}">← ${backText}</a>
-    <div class="card"><h1>Das hat nicht funktioniert</h1><p class="lead">${escapeHtml(error.message)}</p>
-    <button class="button secondary" id="retry">Erneut versuchen</button></div>`;
+    <a class="back" href="${back}">${icon("arrow-left")} ${backText}</a>
+    <div class="card"><h1>Fehler</h1><p class="lead">${escapeHtml(error.message)}</p>
+    <button class="button secondary" id="retry">${icon("refresh")} Erneut versuchen</button></div>`;
   document.querySelector("#retry").addEventListener("click", renderRoute);
 }
 
@@ -99,21 +103,20 @@ async function renderHome() {
   const { events } = await api("/events");
   app.innerHTML = `
     <div class="page-head">
-      <div><p class="eyebrow">Rettungssport</p><h1>Events und Zeitnahmen</h1>
-      <p class="lead">Event öffnen, Zeit stoppen oder Ergebnisse live verfolgen.</p></div>
-      <button class="button" id="new-event">Event anlegen</button>
+      <div><p class="eyebrow">Rettungssport</p><h1>Events</h1></div>
+      <button class="button" id="new-event">${icon("plus")} Neues Event</button>
     </div>
-    <div class="notice">Alle Events und Daten sind öffentlich. Es gibt derzeit keine Anmeldung oder geschützten Verwaltungsfunktionen.</div>
+    <div class="notice">Öffentlich · ohne Anmeldung</div>
     <section class="section" aria-labelledby="events-heading">
       <div class="section-head"><h2 id="events-heading">Alle Events</h2><span class="muted">${events.length} ${events.length === 1 ? "Event" : "Events"}</span></div>
       ${events.length ? `<div class="stack">${events.map((event) => `
         <article class="card event-row">
           <div><h3>${escapeHtml(event.name)}</h3><div class="event-meta">
-            <span>${escapeHtml(dateText(event.event_date))}</span>
-            ${event.location ? `<span>${escapeHtml(event.location)}</span>` : ""}
-            <span>${event.participant_count} Personen</span><span>${event.result_count} Ergebnisse</span>
+            <span class="meta-item">${icon("calendar")} ${escapeHtml(dateText(event.event_date))}</span>
+            ${event.location ? `<span class="meta-item">${icon("location")} ${escapeHtml(event.location)}</span>` : ""}
+            <span class="meta-item">${icon("users")} ${event.participant_count}</span><span class="meta-item">${icon("flag")} ${event.result_count}</span>
           </div></div>
-          <a class="button secondary" href="#/event/${event.id}">Event öffnen</a>
+          <a class="button secondary" href="#/event/${event.id}">Öffnen ${icon("arrow-right")}</a>
         </article>`).join("")}</div>` : `<div class="empty">Noch kein Event vorhanden. Lege das erste Event an.</div>`}
     </section>
     <dialog id="event-dialog"><form class="dialog-body" id="event-form">
@@ -152,22 +155,22 @@ async function renderEvent(id) {
   const { event, participants } = await api(`/events/${id}`);
   setDocumentTitle(event.name);
   app.innerHTML = `
-    <a class="back" href="#/">← Alle Events</a>
+    <a class="back" href="#/">${icon("arrow-left")} Events</a>
     <div class="page-head"><div><p class="eyebrow">${escapeHtml(dateText(event.event_date))}</p><h1>${escapeHtml(event.name)}</h1>
       <p class="lead">${event.location ? escapeHtml(event.location) : "Kein Ort angegeben"} · ${participants.length} Personen</p></div>
-      <button class="button danger small" id="delete-event">Event löschen</button>
+      <button class="button danger small" id="delete-event">${icon("trash")} Löschen</button>
     </div>
     <div class="grid">
-      <article class="card action-card"><h2>Zeit stoppen</h2><p>Eine Person einzeln stoppen, Laps erfassen und das Ergebnis anschließend zuordnen.</p><a class="button" href="#/timer/${id}">Timer öffnen</a></article>
-      <article class="card action-card"><h2>Live-Ergebnisse</h2><p>Ranglisten nach Disziplin und Geschlecht anzeigen. Neue Ergebnisse erscheinen automatisch.</p><a class="button secondary" href="#/viewer/${id}">Viewer öffnen</a></article>
+      <article class="card action-card"><span class="action-icon">${icon("timer")}</span><h2>Timer</h2><p>Stoppen und Laps erfassen</p><a class="button" href="#/timer/${id}">${icon("play")} Öffnen</a></article>
+      <article class="card action-card"><span class="action-icon">${icon("eye")}</span><h2>Ergebnisse</h2><p>Ranglisten live ansehen</p><a class="button secondary" href="#/viewer/${id}">${icon("eye")} Öffnen</a></article>
     </div>
     <section class="section" aria-labelledby="people-heading">
-      <div class="section-head"><h2 id="people-heading">Personen</h2><button class="button secondary" id="new-person">Person hinzufügen</button></div>
-      ${participants.length ? `<div class="table-wrap"><table class="participant-table"><thead><tr><th>Name</th><th>Klasse</th><th>Gliederung</th><th>Ergebnisse</th><th><span class="sr-only">Aktionen</span></th></tr></thead><tbody>
-        ${participants.map((person) => `<tr><td><strong>${escapeHtml(person.name)}</strong><br><span class="muted">${person.gender === "male" ? "Männlich" : "Weiblich"}, ${person.birth_year}</span></td>
-          <td>${escapeHtml(person.age_group)}</td><td>${escapeHtml(person.organization)}</td><td>${person.result_count}</td>
-          <td><button class="button danger small delete-person" data-id="${person.id}" data-name="${escapeHtml(person.name)}">Löschen</button></td></tr>`).join("")}
-      </tbody></table></div>` : `<div class="empty">Noch keine Personen angelegt.</div>`}
+      <div class="section-head"><h2 id="people-heading">Personen</h2><button class="button secondary" id="new-person">${icon("user-plus")} Hinzufügen</button></div>
+      ${participants.length ? `<div class="person-list">
+        ${participants.map((person) => `<article class="person-card">
+          <div class="person-head"><strong>${escapeHtml(person.name)}</strong><button class="button danger small icon-button delete-person" data-id="${person.id}" data-name="${escapeHtml(person.name)}" data-results="${person.result_count}" aria-label="${escapeHtml(person.name)} löschen" title="Löschen">${icon("trash")}</button></div>
+          <div class="person-details"><span>${person.gender === "male" ? "Männlich" : "Weiblich"} · Jg. ${person.birth_year} · ${escapeHtml(person.age_group)}</span><span>${escapeHtml(person.organization)}</span><span>${person.result_count} ${person.result_count === 1 ? "Ergebnis" : "Ergebnisse"}</span></div>
+        </article>`).join("")}</div>` : `<div class="empty">Noch keine Personen.</div>`}
     </section>
     <dialog id="person-dialog"><form class="dialog-body" id="person-form">
       <h2>Person hinzufügen</h2><div class="form-grid">
@@ -199,7 +202,7 @@ async function renderEvent(id) {
   });
 
   document.querySelectorAll(".delete-person").forEach((button) => button.addEventListener("click", async () => {
-    const warning = Number(button.closest("tr").children[3].textContent) > 0 ? " Dabei werden auch alle Ergebnisse dieser Person gelöscht." : "";
+    const warning = Number(button.dataset.results) > 0 ? " Dabei werden auch alle Ergebnisse dieser Person gelöscht." : "";
     if (!confirm(`${button.dataset.name} wirklich löschen?${warning}`)) return;
     try {
       button.disabled = true;
@@ -231,17 +234,17 @@ async function renderTimer(id) {
   };
 
   app.innerHTML = `
-    <div class="timer-shell"><a class="back" href="#/event/${id}">← ${escapeHtml(event.name)}</a>
-      <p class="eyebrow">Einzelzeitnahme</p><h1>Timer</h1><p class="lead">Die Person wird erst nach dem Stoppen ausgewählt.</p>
+    <div class="timer-shell"><a class="back" href="#/event/${id}">${icon("arrow-left")} ${escapeHtml(event.name)}</a>
+      <h1>Timer</h1>
       <div class="timer-setup"><div class="field"><label for="discipline">Stoppmodus</label><select id="discipline">${disciplineOptions()}</select></div>
         <span class="muted" id="lap-limit">Bis zu 20 Abschnitte</span></div>
       <section class="card clock-card" aria-label="Stoppuhr">
         <div class="clock-status" id="clock-status">Bereit</div><div class="clock" id="clock" aria-live="off">00:00,00</div>
         <div class="timer-actions">
-          <button class="button" id="start">Start</button><button class="button secondary" id="lap" disabled>Lap</button><button class="button danger" id="stop" disabled>Stopp</button>
+          <button class="button" id="start">${icon("play")} Start</button><button class="button secondary" id="lap" disabled>${icon("lap")} Lap</button><button class="button danger" id="stop" disabled>${icon("stop")} Stopp</button>
         </div>
-        <div class="timer-secondary"><button class="button secondary small" id="undo" disabled>Letzten Lap zurück</button><button class="button secondary small" id="abort" disabled>Versuch verwerfen</button></div>
-        <p class="progress-note" id="progress">Noch keine Zeit gestartet.</p>
+        <div class="timer-secondary"><button class="button secondary small" id="undo" disabled>${icon("undo")} Lap zurück</button><button class="button secondary small" id="abort" disabled>${icon("x")} Verwerfen</button></div>
+        <p class="progress-note" id="progress">Bereit</p>
       </section>
       <div class="card lap-list" id="lap-list" hidden></div>
       <section class="card save-panel" id="save-panel" hidden></section>
@@ -266,7 +269,7 @@ async function renderTimer(id) {
 
   function updateProgress() {
     const item = config();
-    elements.progress.textContent = timer.status === "idle" ? "Noch keine Zeit gestartet." :
+    elements.progress.textContent = timer.status === "idle" ? "Bereit" :
       item.flexible ? `${timer.segments.length} von maximal ${item.laps} Abschnitten erfasst.` :
       `${timer.segments.length} von ${item.laps} Abschnitten erfasst.`;
     elements["lap-limit"].textContent = item.flexible ? `Bis zu ${item.laps} Abschnitte` : `${item.laps} Abschnitte fest vorgegeben`;
@@ -278,6 +281,7 @@ async function renderTimer(id) {
     elements.clock.textContent = "00:00,00";
     elements["clock-status"].textContent = "Bereit";
     elements.start.disabled = false;
+    elements.start.hidden = false;
     elements.lap.disabled = true;
     elements.stop.disabled = true;
     elements.undo.disabled = true;
@@ -299,15 +303,14 @@ async function renderTimer(id) {
   function renderSavePanel() {
     const panel = elements["save-panel"];
     panel.hidden = false;
-    panel.innerHTML = `<h2>Ergebnis prüfen und speichern</h2>
-      <p class="muted">Abschnittszeiten können vor dem Speichern im Format mm:ss,00 korrigiert werden.</p>
+    panel.innerHTML = `<h2>Ergebnis</h2>
       <div class="edit-times">${timer.segments.map((value, index) => `<div class="field"><label for="segment-${index}">Lap ${index + 1}</label><input class="segment-input" id="segment-${index}" inputmode="decimal" value="${formatTime(value)}" aria-describedby="save-error"></div>`).join("")}</div>
       <div class="total-summary"><span>Gesamtzeit</span><strong id="save-total">${formatTime(capturedTotal())}</strong></div>
-      <div class="field"><label for="participant">Person zuordnen</label><select id="participant"><option value="">Person auswählen …</option>${participants.map((person) =>
+      <div class="field"><label for="participant">Person</label><select id="participant"><option value="">Auswählen …</option>${participants.map((person) =>
         `<option value="${person.id}">${escapeHtml(person.name)} · ${escapeHtml(person.age_group)} · ${escapeHtml(person.organization)}</option>`).join("")}</select></div>
-      ${participants.length ? "" : `<p class="notice">Für dieses Event ist noch keine Person angelegt. Gehe zurück zum Event und füge zuerst eine Person hinzu.</p>`}
+      ${participants.length ? "" : `<p class="notice">Zuerst eine Person im Event hinzufügen.</p>`}
       <p class="form-error" id="save-error" role="alert"></p>
-      <div class="form-actions"><button class="button secondary" id="new-attempt">Versuch verwerfen</button><button class="button" id="save-result" ${participants.length ? "" : "disabled"}>Ergebnis speichern</button></div>`;
+      <div class="form-actions"><button class="button secondary" id="new-attempt">${icon("x")} Verwerfen</button><button class="button" id="save-result" ${participants.length ? "" : "disabled"}>${icon("save")} Speichern</button></div>`;
 
     const inputs = [...panel.querySelectorAll(".segment-input")];
     function readCorrections(showError = false) {
@@ -346,6 +349,7 @@ async function renderTimer(id) {
     timer.segments = [];
     elements["clock-status"].textContent = "Läuft";
     elements.start.disabled = true;
+    elements.start.hidden = true;
     elements.lap.disabled = false;
     elements.stop.disabled = !config().flexible;
     elements.undo.disabled = true;
@@ -395,10 +399,10 @@ async function renderViewer(id) {
   const { event } = await api(`/events/${id}`);
   setDocumentTitle(`Ergebnisse – ${event.name}`);
   app.innerHTML = `
-    <a class="back" href="#/event/${id}">← ${escapeHtml(event.name)}</a>
-    <div class="page-head"><div><p class="eyebrow">Live-Viewer</p><h1>Ergebnisse</h1><p class="lead">Schnellste Gesamtzeit zuerst.</p></div>
+    <a class="back" href="#/event/${id}">${icon("arrow-left")} ${escapeHtml(event.name)}</a>
+    <div class="page-head"><div><p class="eyebrow">Live</p><h1>Ergebnisse</h1></div>
       <div class="viewer-refresh"><div class="live-note"><span class="live-dot"></span><span id="live-status">Live · jede Minute</span></div>
-      <button class="button secondary small" id="refresh-results">Jetzt aktualisieren</button></div></div>
+      <button class="button secondary small" id="refresh-results">${icon("refresh")} Aktualisieren</button></div></div>
     <div class="filters"><div class="field"><label for="viewer-discipline">Disziplin</label><select id="viewer-discipline">${disciplineOptions()}</select></div>
       <div class="field"><label for="viewer-gender">Geschlecht</label><select id="viewer-gender"><option value="female">Weiblich</option><option value="male">Männlich</option></select></div></div>
     <div id="results"><div class="loading">Ergebnisse werden geladen …</div></div>`;
@@ -419,7 +423,7 @@ async function renderViewer(id) {
         clearInterval(cooldownTimer);
         cooldownTimer = null;
         refreshButton.disabled = false;
-        refreshButton.textContent = "Jetzt aktualisieren";
+        refreshButton.innerHTML = `${icon("refresh")} Aktualisieren`;
       } else {
         refreshButton.textContent = `Erneut in ${remaining} s`;
       }
@@ -433,11 +437,13 @@ async function renderViewer(id) {
     loading = true;
     try {
       const data = await api(`/events/${id}/results?discipline=${encodeURIComponent(discipline.value)}&gender=${encodeURIComponent(gender.value)}`);
-      resultsRoot.innerHTML = data.results.length ? `<div class="table-wrap"><table class="result-table"><thead><tr><th class="rank">Rang</th><th>Person</th><th>Gesamtzeit</th><th>Abschnitte</th><th>Klasse / Gliederung</th><th><span class="sr-only">Aktionen</span></th></tr></thead><tbody>
-        ${data.results.map((result, index) => `<tr><td class="rank">${index + 1}</td><td><strong>${escapeHtml(result.participant_name)}</strong><br><span class="muted">Jg. ${result.birth_year}</span></td>
-          <td class="time-cell">${formatTime(result.total_centiseconds)}</td><td class="segments">${result.segments.map((value, lap) => `${lap + 1}: ${formatTime(value)}`).join("<br>")}</td>
-          <td>${escapeHtml(result.age_group)}<br><span class="muted">${escapeHtml(result.organization)}</span></td>
-          <td><button class="button danger small delete-result" data-id="${result.id}" aria-label="Ergebnis von ${escapeHtml(result.participant_name)} löschen">Löschen</button></td></tr>`).join("")}</tbody></table></div>` :
+      resultsRoot.innerHTML = data.results.length ? `<div class="result-list">
+        ${data.results.map((result, index) => `<article class="result-card">
+          <div class="result-head"><span class="rank-badge">${index + 1}</span><div><strong>${escapeHtml(result.participant_name)}</strong><div class="result-meta">Jg. ${result.birth_year} · ${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}</div></div>
+          <button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis von ${escapeHtml(result.participant_name)} löschen" title="Löschen">${icon("trash")}</button></div>
+          <div class="result-time">${formatTime(result.total_centiseconds)}</div>
+          <div class="result-segments">${result.segments.map((value, lap) => `<span>Lap ${lap + 1}<strong>${formatTime(value)}</strong></span>`).join("")}</div>
+        </article>`).join("")}</div>` :
         `<div class="empty">Für diese Disziplin und dieses Geschlecht gibt es noch keine Ergebnisse.</div>`;
       document.querySelector("#live-status").textContent = `Live · aktualisiert ${new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date())}`;
       resultsRoot.querySelectorAll(".delete-result").forEach((button) => button.addEventListener("click", async () => {
