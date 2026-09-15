@@ -124,11 +124,23 @@ function setDocumentTitle(title) {
   document.title = title ? `${title} · Lifesaving Timer` : "Lifesaving Timer";
 }
 
-function setTimerInteractionLock(locked) {
-  document.body.classList.toggle("timer-locked", locked);
+function updateViewportLock() {
+  const locked = document.body.classList.contains("timer-locked")
+    || document.body.classList.contains("review-active")
+    || document.body.classList.contains("event-page");
   viewportMeta.content = locked
     ? "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     : defaultViewport;
+}
+
+function setTimerInteractionLock(locked) {
+  document.body.classList.toggle("timer-locked", locked);
+  updateViewportLock();
+}
+
+function setReviewInteractionLock(locked) {
+  document.body.classList.toggle("review-active", locked);
+  updateViewportLock();
 }
 
 function renderError(error, back = "#/", backText = "Zurück zur Übersicht") {
@@ -548,6 +560,7 @@ async function renderTimer(id) {
     elements["timer-view"].hidden = false;
     elements["review-view"].hidden = true;
     elements["review-view"].innerHTML = "";
+    setReviewInteractionLock(false);
     setTimerInteractionLock(true);
     setDocumentTitle(`Timer – ${event.name}`);
     renderLaps(); updateProgress(); updateControls();
@@ -576,6 +589,7 @@ async function renderTimer(id) {
       ? timer.lapGroups.map((laps, index) => ({ laps: [...laps], value: timer.segments[index] ?? null, frequency: timer.frequencies[index] ?? null }))
       : reviewSegments.map((value, index) => ({ laps: [index + 1], value, frequency: reviewFrequencies[index] }));
     let timeMode = "segment";
+    let editMode = false;
     let glueMode = false;
     const glueHistory = [];
     const optionMarkup = () => participants.map((person) => `<option value="${person.id}">${escapeHtml(person.name)} · ${escapeHtml(person.age_group)} · ${escapeHtml(person.organization)}</option>`).join("");
@@ -583,18 +597,18 @@ async function renderTimer(id) {
       ? `<fieldset class="team-assignment"><legend>Mannschaft</legend>${Array.from({ length: 4 }, (_, index) => `<div class="field"><label for="participant-${index + 1}">Position ${index + 1}</label><select class="participant-select" id="participant-${index + 1}"><option value="">Auswählen …</option>${optionMarkup()}</select></div>`).join("")}</fieldset>`
       : `<div class="field"><label for="participant">Person</label><select class="participant-select" id="participant"><option value="">Auswählen …</option>${optionMarkup()}</select></div>`;
     setTimerInteractionLock(false);
+    setReviewInteractionLock(true);
     elements["timer-view"].hidden = true;
     review.hidden = false;
     setDocumentTitle(`Ergebnis prüfen – ${event.name}`);
     review.innerHTML = `<div class="review-topbar"><button class="button secondary icon-button" id="close-review" aria-label="Zurück zum Timer">${icon("arrow-left")}</button><h1>Ergebnis prüfen</h1><button class="button danger icon-button" id="discard-review" aria-label="Messung löschen" title="Messung löschen">${icon("trash")}</button></div>
       <div class="review-content">
-      <div class="review-tools"><div class="time-mode-toggle" role="group" aria-label="Zeitdarstellung"><button type="button" class="active" data-time-mode="segment" aria-pressed="true">Sekunden</button><button type="button" data-time-mode="cumulative" aria-pressed="false">Kumuliert</button></div><button class="button secondary small glue-mode-toggle" id="glue-mode" type="button" aria-pressed="false">${icon("link")} Kleben</button></div>
+      <div class="review-tools"><div class="time-mode-toggle" role="group" aria-label="Zeitdarstellung"><button type="button" class="active" data-time-mode="segment" aria-pressed="true">Sekunden</button><button type="button" data-time-mode="cumulative" aria-pressed="false">Kumuliert</button></div><div class="review-mode-actions"><button class="button secondary small edit-mode-toggle" id="edit-mode" type="button" aria-pressed="false">${icon("pencil")} Bearbeiten</button><button class="button secondary small glue-mode-toggle" id="glue-mode" type="button" aria-pressed="false">${icon("link")} Kleben</button></div></div>
       <div class="glue-hint" id="glue-hint" hidden><span>Verbinde benachbarte Lap-Bereiche über das Kettensymbol.</span><button class="button secondary small" id="undo-glue" type="button" hidden>${icon("undo")} Rückgängig</button></div>
       <div class="edit-times" id="edit-times"></div>
-      <div class="field official-time-field"><label for="official-time">Offizielle Zeit</label><input id="official-time" inputmode="decimal" placeholder="00:00,00" value="${timer.officialTime === null ? "" : formatTime(timer.officialTime)}" aria-describedby="save-error"></div>
-      <div class="total-summary"><span>Gestoppte Zeit</span><strong id="save-total" aria-live="polite">${formatTime(capturedTotal())}</strong></div>
-      ${assignmentMarkup}
-      <button class="button secondary add-review-person" id="new-review-person" type="button">${icon("user-plus")} Neue Person</button>
+      <div class="review-time-summary"><div class="field official-time-field"><label for="official-time">Offizielle Zeit</label><input id="official-time" inputmode="decimal" placeholder="00:00,00" value="${timer.officialTime === null ? "" : formatTime(timer.officialTime)}" aria-describedby="save-error" readonly></div>
+      <div class="total-summary"><span>Gestoppt</span><strong id="save-total" aria-live="polite">${formatTime(capturedTotal())}</strong></div></div>
+      ${item.team ? `${assignmentMarkup}<button class="button secondary add-review-person" id="new-review-person" type="button">${icon("user-plus")} Neue Person</button>` : `<div class="review-assignment-row">${assignmentMarkup}<button class="button secondary add-review-person" id="new-review-person" type="button">${icon("user-plus")} Neu</button></div>`}
       <p class="form-error" id="save-error" role="alert"></p>
       <div class="form-actions save-actions"><button class="button" id="save-result" ${participants.length >= (item.team ? 4 : 1) ? "" : "disabled"}>${icon("save")} Ergebnis speichern</button></div></div>
       <dialog id="review-person-dialog"><form class="dialog-body" id="review-person-form">
@@ -653,8 +667,9 @@ async function renderTimer(id) {
         const glueButton = glueMode && index < lapGroups.length - 1
           ? `<button class="glue-next" type="button" data-glue-index="${index}" aria-label="${range} mit ${lapRangeLabel(lapGroups[index + 1].laps, "Runde")} verbinden" title="Mit nächster Runde verbinden">${icon("link")}</button>`
           : "";
-        return `<div class="field review-lap-field ${group.laps.length > 1 ? "glued" : ""}"><div class="review-lap-title"><strong>${range}</strong>${glueButton}</div><div class="review-lap-inputs"><label><span>${timeMode === "segment" ? "Zeit (s)" : "Kumuliert"}</span><input class="segment-input" id="segment-${index}" inputmode="decimal" value="${displayedTime}" aria-label="Zeit ${range}" aria-describedby="save-error"></label><label><span>Freq.</span><input class="frequency-input" id="frequency-${index}" inputmode="numeric" value="${Number.isInteger(group.frequency) ? group.frequency : ""}" aria-label="Frequenz ${range}" aria-describedby="save-error"></label></div></div>`;
+        return `<div class="field review-lap-field ${group.laps.length > 1 ? "glued" : ""} ${editMode ? "editable" : ""}"><div class="review-lap-title"><strong>${range}</strong>${glueButton}</div><div class="review-lap-inputs"><label><span>${timeMode === "segment" ? "Zeit (s)" : "Kumuliert"}</span><input class="segment-input" id="segment-${index}" inputmode="decimal" value="${displayedTime}" aria-label="Zeit ${range}" aria-describedby="save-error" ${editMode ? "" : "readonly"}></label><label><span>Freq.</span><input class="frequency-input" id="frequency-${index}" inputmode="numeric" value="${Number.isInteger(group.frequency) ? group.frequency : ""}" aria-label="Frequenz ${range}" aria-describedby="save-error" ${editMode ? "" : "readonly"}></label></div></div>`;
       }).join("");
+      officialInput.readOnly = !editMode;
       editTimes.querySelectorAll("input").forEach((input) => input.addEventListener("input", () => readCorrections(false)));
       editTimes.querySelectorAll(".glue-next").forEach((button) => button.addEventListener("click", () => {
         syncLapGroupsFromInputs();
@@ -708,6 +723,16 @@ async function renderTimer(id) {
       };
     }
     renderLapFields();
+    const editModeButton = review.querySelector("#edit-mode");
+    const glueModeButton = review.querySelector("#glue-mode");
+    function updateReviewModes() {
+      editModeButton.classList.toggle("active", editMode);
+      editModeButton.setAttribute("aria-pressed", String(editMode));
+      glueModeButton.classList.toggle("active", glueMode);
+      glueModeButton.setAttribute("aria-pressed", String(glueMode));
+      review.querySelector("#glue-hint").hidden = !glueMode;
+      renderLapFields();
+    }
     review.querySelectorAll("[data-time-mode]").forEach((button) => button.addEventListener("click", () => {
       if (button.dataset.timeMode === timeMode) return;
       syncLapGroupsFromInputs();
@@ -720,13 +745,18 @@ async function renderTimer(id) {
       renderLapFields();
       readCorrections(false);
     }));
-    review.querySelector("#glue-mode").addEventListener("click", (event) => {
+    editModeButton.addEventListener("click", () => {
+      syncLapGroupsFromInputs();
+      editMode = !editMode;
+      if (editMode) glueMode = false;
+      updateReviewModes();
+      if (editMode) editTimes.querySelector(".segment-input")?.focus();
+    });
+    glueModeButton.addEventListener("click", () => {
       syncLapGroupsFromInputs();
       glueMode = !glueMode;
-      event.currentTarget.classList.toggle("active", glueMode);
-      event.currentTarget.setAttribute("aria-pressed", String(glueMode));
-      review.querySelector("#glue-hint").hidden = !glueMode;
-      renderLapFields();
+      if (glueMode) editMode = false;
+      updateReviewModes();
     });
     review.querySelector("#undo-glue").addEventListener("click", () => {
       const previous = glueHistory.pop();
@@ -783,6 +813,7 @@ async function renderTimer(id) {
       }
       review.hidden = true;
       elements["timer-view"].hidden = false;
+      setReviewInteractionLock(false);
       setTimerInteractionLock(true);
       setDocumentTitle(`Timer – ${event.name}`);
       renderLaps(); updateProgress();
@@ -1065,6 +1096,8 @@ async function renderRoute() {
   app.innerHTML = `<div class="loading">Wird geladen …</div>`;
   const current = route();
   document.body.classList.toggle("timer-page", current.page === "timer");
+  document.body.classList.toggle("event-page", current.page === "event");
+  setReviewInteractionLock(false);
   setTimerInteractionLock(false);
   try {
     if (current.page === "home") return await renderHome();
