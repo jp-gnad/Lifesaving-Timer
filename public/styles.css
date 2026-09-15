@@ -73,6 +73,7 @@ h3 { font-size: 17px; }
 .eyebrow { margin-bottom: 8px; color: var(--primary-dark); font-size: 13px; font-weight: 750; text-transform: uppercase; letter-spacing: .07em; }
 .page-head { display: flex; align-items: stretch; flex-direction: column; gap: 16px; margin-bottom: 22px; }
 .page-head > .button { width: 100%; }
+.page-head > #delete-event { width: auto; min-height: 38px; align-self: flex-start; padding: 6px 10px; font-size: 13px; }
 .back { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; margin-bottom: 18px; overflow: hidden; color: var(--primary-dark); font-weight: 650; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
 .back:hover { text-decoration: underline; }
 .icon { width: 1.15em; height: 1.15em; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
