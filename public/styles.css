@@ -196,7 +196,3 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
   .clock-card { padding-left: 12px; padding-right: 12px; }
   .participant-table th:nth-child(3), .participant-table td:nth-child(3) { display: none; }
 }
-
-@media (prefers-reduced-motion: no-preference) {
-  .toast { transition: opacity .12s ease; }
-}

@@ -49,7 +49,7 @@ npx wrangler d1 create lifesaving-timer-db
 Der Befehl zeigt eine `database_id` an. Öffne `wrangler.jsonc` und ersetze dort exakt:
 
 ```text
-PASTE_YOUR_DATABASE_ID_HERE
+00000000-0000-0000-0000-000000000000
 ```
 
 durch diese ID. Anführungszeichen beibehalten und die Datei speichern.
