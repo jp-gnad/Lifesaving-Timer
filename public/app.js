@@ -761,13 +761,12 @@ async function renderViewer(id) {
       counts.set(key, (counts.get(key) || 0) + 1);
     });
     resultsRoot.innerHTML = `<div class="result-selection" aria-label="Ergebnisgruppen">
-      <div class="result-selection-head"><span></span><strong>Weiblich</strong><strong>Männlich</strong></div>
+      <div class="result-selection-head"><strong>Weiblich</strong><strong>Männlich</strong></div>
       ${Object.entries(disciplines).map(([disciplineId, item]) => `<div class="result-selection-row">
-        <strong class="result-selection-discipline">${escapeHtml(item.name)}</strong>
         ${["female", "male"].map((gender) => {
           const count = counts.get(`${disciplineId}:${gender}`) || 0;
           return count
-            ? `<button class="result-choice" data-discipline="${disciplineId}" data-gender="${gender}" aria-label="${escapeHtml(item.name)}, ${genderName(gender)}, ${count} ${count === 1 ? "Ergebnis" : "Ergebnisse"}"><strong>${count}</strong><span>${count === 1 ? "Ergebnis" : "Ergebnisse"}</span></button>`
+            ? `<button class="result-choice" data-discipline="${disciplineId}" data-gender="${gender}" aria-label="${escapeHtml(item.name)}, ${genderName(gender)}, ${count} ${count === 1 ? "Ergebnis" : "Ergebnisse"}"><strong>${count}</strong><span>${escapeHtml(item.name)}</span></button>`
             : `<span class="result-choice-empty" aria-label="Keine Ergebnisse">–</span>`;
         }).join("")}
       </div>`).join("")}
