@@ -523,8 +523,8 @@ async function renderTimer(id) {
     review.innerHTML = `<div class="review-topbar"><button class="button secondary icon-button" id="close-review" aria-label="Zurück zum Timer">${icon("arrow-left")}</button><h1>Ergebnis prüfen</h1><button class="button danger icon-button" id="discard-review" aria-label="Messung löschen" title="Messung löschen">${icon("trash")}</button></div>
       <div class="review-content">
       <div class="edit-times">${reviewSegments.map((value, index) => `<div class="field review-lap-field"><strong>Runde ${index + 1}</strong><div class="review-lap-inputs"><label><span>Zeit (s)</span><input class="segment-input" id="segment-${index}" inputmode="decimal" value="${value === null ? "" : formatReviewTime(value)}" aria-label="Zeit Runde ${index + 1}" aria-describedby="save-error"></label><label><span>Freq.</span><input class="frequency-input" id="frequency-${index}" inputmode="numeric" value="${reviewFrequencies[index] ?? ""}" aria-label="Frequenz Runde ${index + 1}" aria-describedby="save-error"></label></div></div>`).join("")}</div>
-      <div class="total-summary"><span>Summe der Abschnitte</span><strong id="save-total">${formatReviewTime(capturedTotal())}</strong></div>
-      <div class="field official-time-field"><label for="official-time">Offizielle Zeit</label><input id="official-time" inputmode="decimal" value="${formatReviewTime(timer.officialTime ?? capturedTotal())}" aria-describedby="save-error"></div>
+      <div class="field official-time-field"><label for="official-time">Offizielle Zeit</label><input id="official-time" inputmode="decimal" placeholder="00:00,00" value="${timer.officialTime === null ? "" : formatTime(timer.officialTime)}" aria-describedby="save-error"></div>
+      <div class="total-summary"><span>Gestoppte Zeit</span><strong id="save-total" aria-live="polite">${formatTime(capturedTotal())}</strong></div>
       ${assignmentMarkup}
       <button class="button secondary add-review-person" id="new-review-person" type="button">${icon("user-plus")} Neue Person</button>
       <p class="form-error" id="save-error" role="alert"></p>
@@ -556,16 +556,18 @@ async function renderTimer(id) {
         if (!value) return null;
         return /^\d{1,3}$/.test(value) && Number(value) > 0 ? Number(value) : Number.NaN;
       });
-      const officialTime = parseReviewTime(officialInput.value);
+      const officialText = officialInput.value.trim();
+      const officialTime = officialText ? parseTime(officialText) : null;
       const invalidSegments = segments.some((value) => value === null || value <= 0);
       const invalidFrequencies = frequencies.some((value) => Number.isNaN(value));
-      const invalidOfficialTime = officialTime === null || officialTime <= 0;
-      review.querySelector("#save-total").textContent = invalidSegments ? "–" : formatReviewTime(segments.reduce((sum, value) => sum + value, 0));
+      const invalidOfficialTime = Boolean(officialText) && (officialTime === null || officialTime <= 0);
+      const stoppedTime = segments.reduce((sum, value) => sum + (value !== null && value > 0 ? value : 0), 0);
+      review.querySelector("#save-total").textContent = formatTime(stoppedTime);
       review.querySelector("#save-error").textContent = showError
         ? (invalidSegments
           ? "Bitte alle Abschnittszeiten als Sekunden, z. B. 61,00, eingeben."
           : (invalidOfficialTime
-            ? "Bitte die offizielle Zeit als Sekunden, z. B. 61,00, eingeben."
+            ? "Bitte die offizielle Zeit im Format mm:ss,00 eingeben."
             : (invalidFrequencies ? "Frequenzen bitte als ganze Zahl von 1 bis 999 eingeben." : "")))
         : "";
       return invalidSegments || invalidOfficialTime || invalidFrequencies ? null : { segments, frequencies, officialTime };
@@ -706,7 +708,7 @@ async function renderTimer(id) {
       const finalSegment = finalTime - capturedTotal();
       if (finalSegment <= 0) return;
       timer.displayed = finalTime;
-      timer.officialTime = finalTime;
+      timer.officialTime = null;
       timer.status = "stopped";
       finishFrequency();
       if (timer.frequencies[timer.segments.length] === undefined) timer.frequencies[timer.segments.length] = null;

@@ -219,7 +219,7 @@ async function handleApi(request, env) {
       throw new Error("Frequenzen müssen ganze Zahlen von 1 bis 999 sein.");
     }
     const segmentTotal = segments.reduce((sum, value) => sum + value, 0);
-    const officialTime = body.officialTime === undefined ? segmentTotal : Number(body.officialTime);
+    const officialTime = body.officialTime == null ? segmentTotal : Number(body.officialTime);
     if (!Number.isInteger(officialTime) || officialTime <= 0) throw new Error("Ungültige offizielle Zeit.");
     if (officialTime > 86_400_000) throw new Error("Zeit ist zu lang.");
     const id = crypto.randomUUID();
