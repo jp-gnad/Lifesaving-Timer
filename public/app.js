@@ -72,7 +72,7 @@ function formatTime(centiseconds) {
   const minutes = Math.floor(safe / 6000);
   const seconds = Math.floor((safe % 6000) / 100);
   const hundredths = safe % 100;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")},${String(hundredths).padStart(2, "0")}`;
+  return `${minutes}:${String(seconds).padStart(2, "0")},${String(hundredths).padStart(2, "0")}`;
 }
 
 function formatReviewTime(centiseconds) {
@@ -371,7 +371,7 @@ async function renderTimer(id) {
         <button class="mode-button" id="mode-button" aria-haspopup="dialog"><span><strong id="mode-name">Normal</strong><small id="mode-laps">max. 20 Laps</small></span>${icon("chevron-down")}</button>
       </div>
       <section class="card clock-card" aria-label="Stoppuhr">
-        <div class="clock-status" id="clock-status">Bereit</div><div class="clock" id="clock" aria-live="off">00:00,00</div>
+        <div class="clock-status" id="clock-status">Bereit</div><div class="clock" id="clock" aria-live="off">0:00,00</div>
         <div class="frequency-progress" id="frequency-progress" aria-hidden="true"><span id="frequency-bar"></span></div>
         <p class="progress-note" id="progress">0 / 20 Laps</p>
         <div class="timer-actions">
@@ -554,7 +554,7 @@ async function renderTimer(id) {
     cancelAnimationFrame(animationFrame);
     Object.assign(timer, { status: "idle", startedAt: 0, displayed: 0, segments: [], frequencies: [], lapGroups: [], officialTime: null });
     resetFrequencyCapture();
-    elements.clock.textContent = "00:00,00";
+    elements.clock.textContent = "0:00,00";
     elements["clock-status"].textContent = "Bereit";
     elements["mode-button"].disabled = false;
     elements["timer-view"].hidden = false;
@@ -606,7 +606,7 @@ async function renderTimer(id) {
       <div class="review-tools"><div class="time-mode-toggle" role="group" aria-label="Zeitdarstellung"><button type="button" class="active" data-time-mode="segment" aria-pressed="true">Sekunden</button><button type="button" data-time-mode="cumulative" aria-pressed="false">Kumuliert</button></div><div class="review-mode-actions"><button class="button secondary small edit-mode-toggle" id="edit-mode" type="button" aria-pressed="false">${icon("pencil")} Bearbeiten</button><button class="button secondary small glue-mode-toggle" id="glue-mode" type="button" aria-pressed="false">${icon("link")} Kleben</button></div></div>
       <div class="glue-hint" id="glue-hint" hidden><span>Verbinde benachbarte Lap-Bereiche über das Kettensymbol.</span><button class="button secondary small" id="undo-glue" type="button" hidden>${icon("undo")} Rückgängig</button></div>
       <div class="edit-times" id="edit-times"></div>
-      <div class="review-time-summary"><div class="field official-time-field"><label for="official-time">Offizielle Zeit</label><input id="official-time" inputmode="decimal" placeholder="00:00,00" value="${timer.officialTime === null ? "" : formatTime(timer.officialTime)}" aria-describedby="save-error" readonly></div>
+      <div class="review-time-summary"><div class="field official-time-field"><label for="official-time">Offizielle Zeit</label><input id="official-time" inputmode="decimal" placeholder="0:00,00" value="${timer.officialTime === null ? "" : formatTime(timer.officialTime)}" aria-describedby="save-error" readonly></div>
       <div class="total-summary"><span>Gestoppt</span><strong id="save-total" aria-live="polite">${formatTime(capturedTotal())}</strong></div></div>
       ${item.team ? `${assignmentMarkup}<button class="button secondary add-review-person" id="new-review-person" type="button">${icon("user-plus")} Neue Person</button>` : `<div class="review-assignment-row">${assignmentMarkup}<button class="button secondary add-review-person" id="new-review-person" type="button">${icon("user-plus")} Neu</button></div>`}
       <p class="form-error" id="save-error" role="alert"></p>
@@ -713,9 +713,9 @@ async function renderTimer(id) {
         ? (invalidSegments || missingSegments
           ? (timeMode === "segment"
             ? "Abschnittszeiten bitte als Sekunden, z. B. 61,00, eingeben. Leere Runden sind erlaubt."
-            : "Kumulierte Zeiten bitte aufsteigend im Format mm:ss,00 eingeben. Leere Runden sind erlaubt.")
+            : "Kumulierte Zeiten bitte aufsteigend im Format m:ss,00 eingeben. Leere Runden sind erlaubt.")
           : (invalidOfficialTime
-            ? "Bitte die offizielle Zeit im Format mm:ss,00 eingeben."
+            ? "Bitte die offizielle Zeit im Format m:ss,00 eingeben."
             : (invalidFrequencies ? "Frequenzen bitte als ganze Zahl von 1 bis 999 eingeben." : "")))
         : "";
       return invalidSegments || missingSegments || invalidOfficialTime || invalidFrequencies ? null : {
@@ -946,7 +946,7 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
     <a class="back" href="#/event/${id}">${icon("arrow-left")} ${escapeHtml(event.name)}</a>
     <div class="page-head viewer-page-head"><h1>Ergebnisse</h1>
       <div class="viewer-refresh"><div class="live-note"><span class="live-dot"></span><span id="live-status">Live · jede Minute</span></div>
-      <button class="button secondary small" id="refresh-results">${icon("refresh")} Aktualisieren</button></div></div></div>
+      <button class="button secondary viewer-refresh-button" id="refresh-results">${icon("refresh")} Aktualisieren</button></div></div></div>
     <div id="results"><div class="loading">Ergebnisse werden geladen …</div></div>`;
 
   const overviewHead = document.querySelector("#viewer-overview-head");
@@ -1005,10 +1005,11 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
         const details = teamMembers.length
           ? `<div class="result-team-members">${teamMembers.map((member) => `<span>${member.position}. ${escapeHtml(member.name)} (${String(member.birth_year).slice(-2)})</span>`).join("")}</div>`
           : `<div class="result-meta">${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}</div>`;
+        const stoppedTime = result.segments.reduce((sum, value) => sum + (Number.isInteger(value) && value > 0 ? value : 0), 0);
         return `<article class="result-card">
         <div class="result-head"><span class="rank-badge">${index + 1}</span><div><strong>${escapeHtml(displayName)}</strong>${details}</div>
         <button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis ${index + 1} löschen" title="Löschen">${icon("trash")}</button></div>
-        <div class="result-time">${formatTime(result.total_centiseconds)}</div>
+        <div class="result-times"><div><span>Gestoppt</span><strong>${formatTime(stoppedTime)}</strong></div><div class="official"><span>Offiziell</span><strong>${formatTime(result.total_centiseconds)}</strong></div></div>
         <div class="result-segments">${result.segments.map((value, lap) => {
           const group = lapGroups[lap] || [lap + 1];
           const glued = group.length > 1;
@@ -1080,7 +1081,7 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
       const data = await api(`/events/${id}/results`);
       allResults = data.results;
       renderContent();
-      document.querySelector("#live-status").textContent = `Live · aktualisiert ${new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date())}`;
+      document.querySelector("#live-status").textContent = `Live · ${new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date())}`;
     } catch (err) {
       if (!silent) resultsRoot.innerHTML = `<div class="empty">${escapeHtml(err.message)}</div>`;
       document.querySelector("#live-status").textContent = "Verbindung unterbrochen";

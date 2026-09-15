@@ -16,7 +16,7 @@ Eine bewusst einfache, helle Web-App zur Zeitnahme im Rettungssport. Events, Per
 - Zuordnung einer Person oder von vier Mannschaftspositionen erst nach dem Stoppen
 - Separate offizielle Zeit unabhängig von den Abschnittszeiten
 - Live-Rangliste nach Disziplin und Geschlecht, automatisch jede Minute oder manuell frühestens alle 10 Sekunden aktualisiert
-- Speicherung im Format `mm:ss,00` (intern auf Hundertstelsekunden genau)
+- Speicherung im Format `m:ss,00`, ab zehn Minuten `mm:ss,00` (intern auf Hundertstelsekunden genau)
 
 ## Technik
 
