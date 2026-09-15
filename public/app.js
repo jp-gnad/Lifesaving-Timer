@@ -157,18 +157,15 @@ async function renderHome() {
   const { events } = await api("/events");
   app.innerHTML = `
     <div class="page-head">
-      <div><p class="eyebrow">Rettungssport</p><h1>Events</h1></div>
+      <h1>Events</h1>
       <button class="button" id="new-event">${icon("plus")} Neues Event</button>
     </div>
-    <div class="notice">Öffentlich · ohne Anmeldung</div>
-    <section class="section" aria-labelledby="events-heading">
-      <div class="section-head"><h2 id="events-heading">Alle Events</h2><span class="muted">${events.length} ${events.length === 1 ? "Event" : "Events"}</span></div>
+    <section class="section event-list-section" aria-label="Events">
       ${events.length ? `<div class="stack">${events.map((event) => `
         <a class="card event-row" href="#/event/${event.id}" aria-label="${escapeHtml(event.name)} öffnen">
           <div><h3>${escapeHtml(event.name)}</h3><div class="event-meta">
             <span class="meta-item">${icon("calendar")} ${escapeHtml(dateText(event.event_date))}</span>
             ${event.location ? `<span class="meta-item">${icon("location")} ${escapeHtml(event.location)}</span>` : ""}
-            <span class="meta-item">${icon("users")} ${event.participant_count}</span><span class="meta-item">${icon("flag")} ${event.result_count}</span>
           </div></div>
           <span class="event-row-arrow">${icon("arrow-right")}</span>
         </a>`).join("")}</div>` : `<div class="empty">Noch kein Event vorhanden. Lege das erste Event an.</div>`}
@@ -210,8 +207,8 @@ async function renderEvent(id) {
   setDocumentTitle(event.name);
   app.innerHTML = `
     <a class="back" href="#/">${icon("arrow-left")} Events</a>
-    <div class="page-head"><div><p class="eyebrow">${escapeHtml(dateText(event.event_date))}</p><div class="event-title-row"><h1>${escapeHtml(event.name)}</h1><button class="button secondary icon-button" id="edit-event" type="button" aria-label="Event bearbeiten" title="Event bearbeiten">${icon("pencil")}</button></div>
-      <p class="lead">${event.location ? escapeHtml(event.location) : "Kein Ort angegeben"} · ${participants.length} Personen</p></div>
+    <div class="page-head event-page-head"><div><div class="event-title-row"><h1>${escapeHtml(event.name)}</h1><button class="button secondary icon-button" id="edit-event" type="button" aria-label="Event bearbeiten" title="Event bearbeiten">${icon("pencil")}</button></div>
+      <p class="event-summary">${escapeHtml(dateText(event.event_date))} · ${event.location ? escapeHtml(event.location) : "Kein Ort"} · ${participants.length} Personen</p></div>
     </div>
     <div class="event-action-grid">
       <a class="card event-action-tile" href="#/timer/${id}"><span class="event-action-icon">${icon("timer")}</span><strong>Timer</strong></a>
@@ -911,7 +908,7 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
   app.innerHTML = `
     <div id="viewer-overview-head" ${selected ? "hidden" : ""}>
     <a class="back" href="#/event/${id}">${icon("arrow-left")} ${escapeHtml(event.name)}</a>
-    <div class="page-head"><div><p class="eyebrow">Live</p><h1>Ergebnisse</h1></div>
+    <div class="page-head viewer-page-head"><h1>Ergebnisse</h1>
       <div class="viewer-refresh"><div class="live-note"><span class="live-dot"></span><span id="live-status">Live · jede Minute</span></div>
       <button class="button secondary small" id="refresh-results">${icon("refresh")} Aktualisieren</button></div></div></div>
     <div id="results"><div class="loading">Ergebnisse werden geladen …</div></div>`;
@@ -958,7 +955,10 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
     overviewHead.hidden = true;
     setDocumentTitle(`${item.name} · ${genderName(selected.gender)} – ${event.name}`);
     const results = allResults.filter((result) => result.discipline === selected.discipline && result.gender === selected.gender);
-    const lapCount = results.reduce((maximum, result) => Math.max(maximum, result.segments.length), 0);
+    const lapCount = results.reduce((maximum, result) => {
+      const coveredLaps = resultLapGroups(result).flat();
+      return Math.max(maximum, coveredLaps.length ? Math.max(...coveredLaps) : result.segments.length);
+    }, 0);
     const cardView = `<div class="result-list">
       ${results.map((result, index) => {
         const teamMembers = result.team_members || [];
@@ -971,7 +971,11 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
         <div class="result-head"><span class="rank-badge">${index + 1}</span><div><strong>${escapeHtml(displayName)}</strong>${details}</div>
         <button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis ${index + 1} löschen" title="Löschen">${icon("trash")}</button></div>
         <div class="result-time">${formatTime(result.total_centiseconds)}</div>
-        <div class="result-segments">${result.segments.map((value, lap) => `<span><span class="result-lap-label">${lapRangeLabel(lapGroups[lap])}${Number.isInteger(result.frequencies?.[lap]) ? `<small>${result.frequencies[lap]}/min</small>` : ""}</span><strong>${value === null ? "–" : formatTime(value)}</strong></span>`).join("")}</div>
+        <div class="result-segments">${result.segments.map((value, lap) => {
+          const group = lapGroups[lap] || [lap + 1];
+          const glued = group.length > 1;
+          return `<span class="${glued ? "glued-result-lap" : ""}"><span class="result-lap-label">${lapRangeLabel(group)}${Number.isInteger(result.frequencies?.[lap]) ? `<small>${result.frequencies[lap]}/min</small>` : ""}</span><strong>${value === null ? "–" : formatTime(value)}</strong></span>`;
+        }).join("")}</div>
       </article>`;
       }).join("")}</div>`;
     const tableView = `<div class="result-table-wrap"><table class="result-table">
@@ -984,7 +988,11 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
         const details = teamMembers.length ? teamMembers.map((member) => `${member.position}. ${escapeHtml(member.name)} (${String(member.birth_year).slice(-2)})`).join("<br>") : `${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}`;
         return `<tr><td><strong>${index + 1}. ${escapeHtml(displayName)}</strong><small>${details}</small></td>
         <td class="official-result">${formatTime(result.total_centiseconds)}</td>
-        ${Array.from({ length: lapCount }, (_, lap) => `<td>${result.segments[lap] ? `<span class="table-lap-value">${formatTime(result.segments[lap])}<small class="table-lap-label">${lapRangeLabel(lapGroups[lap])}</small>${Number.isInteger(result.frequencies?.[lap]) ? `<small>${result.frequencies[lap]}/min</small>` : ""}</span>` : "–"}</td>`).join("")}
+        ${result.segments.map((value, lap) => {
+          const group = lapGroups[lap] || [lap + 1];
+          const span = Math.max(1, group.length);
+          return `<td colspan="${span}" class="${span > 1 ? "glued-result-cell" : ""}" aria-label="${lapRangeLabel(group)}">${value ? `<span class="table-lap-value">${formatTime(value)}${Number.isInteger(result.frequencies?.[lap]) ? `<small>${result.frequencies[lap]}/min</small>` : ""}</span>` : "–"}</td>`;
+        }).join("")}${Array.from({ length: Math.max(0, lapCount - lapGroups.flat().length) }, () => "<td>–</td>").join("")}
         <td><button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis ${index + 1} löschen" title="Löschen">${icon("trash")}</button></td></tr>`;
       }).join("")}</tbody>
     </table></div>`;
