@@ -233,13 +233,15 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 .team-assignment legend { grid-column: 1 / -1; margin-bottom: 7px; padding: 0; font-size: 14px; font-weight: 700; }
 .add-review-person { width: 100%; margin-top: 10px; }
 
-.result-selection { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.result-selection { width: 100%; display: grid; gap: 8px; }
+.result-selection-row { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .result-choice { width: 100%; min-width: 0; min-height: 68px; border: 1px solid #b9cff1; border-radius: 9px; padding: 10px 8px; background: #eef5ff; color: var(--primary-dark); cursor: pointer; display: grid; place-content: center; text-align: center; line-height: 1.15; }
 .result-choice.female { border-color: #efb8bd; background: #fff0f2; color: #a61b2b; }
 .result-choice.male { border-color: #b9cff1; background: #eef5ff; color: var(--primary-dark); }
 .result-choice strong { min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
 .result-choice span { margin-top: 5px; font-size: 12px; font-weight: 700; }
-.viewer-list-back { min-height: 42px; margin: 0 0 16px; border: 0; padding: 0; background: transparent; color: var(--primary-dark); cursor: pointer; display: inline-flex; align-items: center; gap: 7px; font-weight: 700; }
+.result-choice-space { min-width: 0; min-height: 68px; }
+.viewer-list-back { min-height: 42px; margin: 0 0 16px; border: 0; padding: 0; background: transparent; color: var(--primary-dark); cursor: pointer; display: inline-flex; align-items: center; gap: 7px; font-weight: 700; text-decoration: none; }
 .viewer-list-heading { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .viewer-list-title { min-width: 0; }
 .viewer-list-title h2 { margin: 0; }
@@ -346,8 +348,9 @@ body.timer-page.timer-locked { position: fixed; inset: 0; width: 100%; height: 1
   .result-segments { grid-template-columns: 1fr; }
   .form-actions { grid-template-columns: 1fr; }
   .team-assignment { grid-template-columns: 1fr; }
-  .result-selection { gap: 6px; }
+  .result-selection, .result-selection-row { gap: 6px; }
   .result-choice { min-height: 66px; }
+  .result-choice-space { min-height: 66px; }
   .viewer-list-heading { align-items: stretch; flex-direction: column; }
   .result-view-toggle { width: 100%; }
 }

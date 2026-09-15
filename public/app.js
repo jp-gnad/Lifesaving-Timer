@@ -59,7 +59,7 @@ async function api(path, options = {}) {
 
 function route() {
   const parts = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
-  return { page: parts[0] || "home", id: parts[1] || null };
+  return { page: parts[0] || "home", id: parts[1] || null, discipline: parts[2] || null, gender: parts[3] || null };
 }
 
 function dateText(value) {
@@ -862,58 +862,71 @@ async function renderTimer(id) {
   setTimerInteractionLock(true);
 }
 
-async function renderViewer(id) {
+async function renderViewer(id, initialDiscipline = null, initialGender = null) {
   const { event } = await api(`/events/${id}`);
+  let selected = disciplines[initialDiscipline] && ["female", "male"].includes(initialGender)
+    ? { discipline: initialDiscipline, gender: initialGender }
+    : null;
   setDocumentTitle(`Ergebnisse – ${event.name}`);
   app.innerHTML = `
+    <div id="viewer-overview-head" ${selected ? "hidden" : ""}>
     <a class="back" href="#/event/${id}">${icon("arrow-left")} ${escapeHtml(event.name)}</a>
     <div class="page-head"><div><p class="eyebrow">Live</p><h1>Ergebnisse</h1></div>
       <div class="viewer-refresh"><div class="live-note"><span class="live-dot"></span><span id="live-status">Live · jede Minute</span></div>
-      <button class="button secondary small" id="refresh-results">${icon("refresh")} Aktualisieren</button></div></div>
+      <button class="button secondary small" id="refresh-results">${icon("refresh")} Aktualisieren</button></div></div></div>
     <div id="results"><div class="loading">Ergebnisse werden geladen …</div></div>`;
 
+  const overviewHead = document.querySelector("#viewer-overview-head");
   const resultsRoot = document.querySelector("#results");
   const refreshButton = document.querySelector("#refresh-results");
   let loading = false;
   let allResults = [];
-  let selected = null;
   let resultView = "cards";
 
   const genderName = (gender) => gender === "female" ? "Weiblich" : "Männlich";
 
   function renderSelection() {
+    overviewHead.hidden = false;
+    setDocumentTitle(`Ergebnisse – ${event.name}`);
     const counts = new Map();
     allResults.forEach((result) => {
       const key = `${result.discipline}:${result.gender}`;
       counts.set(key, (counts.get(key) || 0) + 1);
     });
-    const availableGroups = Object.entries(disciplines).flatMap(([disciplineId, item]) =>
-      ["female", "male"].map((gender) => ({ disciplineId, item, gender, count: counts.get(`${disciplineId}:${gender}`) || 0 }))
-    ).filter((group) => group.count > 0);
-    resultsRoot.innerHTML = availableGroups.length
-      ? `<div class="result-selection" aria-label="Ergebnisgruppen">${availableGroups.map(({ disciplineId, item, gender, count }) =>
-        `<button class="result-choice ${gender === "female" ? "female" : "male"}" data-discipline="${disciplineId}" data-gender="${gender}" aria-label="${escapeHtml(item.name)}, ${genderName(gender)}, ${count} ${count === 1 ? "Ergebnis" : "Ergebnisse"}"><strong>${escapeHtml(item.name)}</strong><span>${genderName(gender)}</span></button>`
+    const availableDisciplines = Object.entries(disciplines).map(([disciplineId, item]) => ({
+      disciplineId,
+      item,
+      femaleCount: counts.get(`${disciplineId}:female`) || 0,
+      maleCount: counts.get(`${disciplineId}:male`) || 0,
+    })).filter(({ femaleCount, maleCount }) => femaleCount > 0 || maleCount > 0);
+    const resultButton = (disciplineId, item, gender, count) => count
+      ? `<button class="result-choice ${gender === "female" ? "female" : "male"}" data-discipline="${disciplineId}" data-gender="${gender}" aria-label="${escapeHtml(item.name)}, ${genderName(gender)}, ${count} ${count === 1 ? "Ergebnis" : "Ergebnisse"}"><strong>${escapeHtml(item.name)}</strong><span>${genderName(gender)}</span></button>`
+      : `<span class="result-choice-space" aria-hidden="true"></span>`;
+    resultsRoot.innerHTML = availableDisciplines.length
+      ? `<div class="result-selection" aria-label="Ergebnisgruppen">${availableDisciplines.map(({ disciplineId, item, femaleCount, maleCount }) =>
+        `<div class="result-selection-row">${resultButton(disciplineId, item, "female", femaleCount)}${resultButton(disciplineId, item, "male", maleCount)}</div>`
       ).join("")}</div>`
       : `<div class="empty">Noch keine Ergebnisse.</div>`;
     resultsRoot.querySelectorAll(".result-choice").forEach((button) => button.addEventListener("click", () => {
-      selected = { discipline: button.dataset.discipline, gender: button.dataset.gender };
-      renderContent();
       window.scrollTo(0, 0);
+      location.hash = `#/viewer/${id}/${button.dataset.discipline}/${button.dataset.gender}`;
     }));
   }
 
   function renderResultList() {
     const item = disciplines[selected.discipline];
+    overviewHead.hidden = true;
+    setDocumentTitle(`${item.name} · ${genderName(selected.gender)} – ${event.name}`);
     const results = allResults.filter((result) => result.discipline === selected.discipline && result.gender === selected.gender);
     const lapCount = results.reduce((maximum, result) => Math.max(maximum, result.segments.length), 0);
     const cardView = `<div class="result-list">
       ${results.map((result, index) => {
         const teamMembers = result.team_members || [];
         const lapGroups = resultLapGroups(result);
-        const displayName = teamMembers.length ? "Mannschaft" : result.participant_name;
+        const displayName = teamMembers.length ? "Mannschaft" : `${result.participant_name} (${String(result.birth_year).slice(-2)})`;
         const details = teamMembers.length
-          ? `<div class="result-team-members">${teamMembers.map((member) => `<span>${member.position}. ${escapeHtml(member.name)}</span>`).join("")}</div>`
-          : `<div class="result-meta">Jg. ${result.birth_year} · ${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}</div>`;
+          ? `<div class="result-team-members">${teamMembers.map((member) => `<span>${member.position}. ${escapeHtml(member.name)} (${String(member.birth_year).slice(-2)})</span>`).join("")}</div>`
+          : `<div class="result-meta">${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}</div>`;
         return `<article class="result-card">
         <div class="result-head"><span class="rank-badge">${index + 1}</span><div><strong>${escapeHtml(displayName)}</strong>${details}</div>
         <button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis ${index + 1} löschen" title="Löschen">${icon("trash")}</button></div>
@@ -927,23 +940,18 @@ async function renderViewer(id) {
       <tbody>${results.map((result, index) => {
         const teamMembers = result.team_members || [];
         const lapGroups = resultLapGroups(result);
-        const displayName = teamMembers.length ? "Mannschaft" : result.participant_name;
-        const details = teamMembers.length ? teamMembers.map((member) => `${member.position}. ${escapeHtml(member.name)}`).join("<br>") : `Jg. ${result.birth_year} · ${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}`;
+        const displayName = teamMembers.length ? "Mannschaft" : `${result.participant_name} (${String(result.birth_year).slice(-2)})`;
+        const details = teamMembers.length ? teamMembers.map((member) => `${member.position}. ${escapeHtml(member.name)} (${String(member.birth_year).slice(-2)})`).join("<br>") : `${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}`;
         return `<tr><td><strong>${index + 1}. ${escapeHtml(displayName)}</strong><small>${details}</small></td>
         <td class="official-result">${formatTime(result.total_centiseconds)}</td>
         ${Array.from({ length: lapCount }, (_, lap) => `<td>${result.segments[lap] ? `<span class="table-lap-value">${formatTime(result.segments[lap])}<small class="table-lap-label">${lapRangeLabel(lapGroups[lap])}</small>${Number.isInteger(result.frequencies?.[lap]) ? `<small>${result.frequencies[lap]}/min</small>` : ""}</span>` : "–"}</td>`).join("")}
         <td><button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis ${index + 1} löschen" title="Löschen">${icon("trash")}</button></td></tr>`;
       }).join("")}</tbody>
     </table></div>`;
-    resultsRoot.innerHTML = `<button class="viewer-list-back" id="viewer-list-back">${icon("arrow-left")} Übersicht</button>
+    resultsRoot.innerHTML = `<a class="viewer-list-back" id="viewer-list-back" href="#/viewer/${id}">${icon("arrow-left")} Ergebnisse</a>
       <div class="viewer-list-heading"><div class="viewer-list-title"><p class="eyebrow">${genderName(selected.gender)}</p><h2>${escapeHtml(item.name)}</h2></div>
         <div class="result-view-toggle" role="group" aria-label="Darstellung"><button data-result-view="cards" class="${resultView === "cards" ? "active" : ""}" aria-pressed="${resultView === "cards"}">${icon("cards")} Karten</button><button data-result-view="table" class="${resultView === "table" ? "active" : ""}" aria-pressed="${resultView === "table"}">${icon("table")} Tabelle</button></div></div>
       ${results.length ? (resultView === "table" ? tableView : cardView) : `<div class="empty">Noch keine Ergebnisse.</div>`}`;
-    resultsRoot.querySelector("#viewer-list-back").addEventListener("click", () => {
-      selected = null;
-      renderContent();
-      window.scrollTo(0, 0);
-    });
     resultsRoot.querySelectorAll("[data-result-view]").forEach((button) => button.addEventListener("click", () => {
       resultView = button.dataset.resultView;
       renderResultList();
@@ -1015,7 +1023,7 @@ async function renderRoute() {
     if (!current.id) throw new Error("Die Adresse ist unvollständig.");
     if (current.page === "event") return await renderEvent(current.id);
     if (current.page === "timer") return await renderTimer(current.id);
-    if (current.page === "viewer") return await renderViewer(current.id);
+    if (current.page === "viewer") return await renderViewer(current.id, current.discipline, current.gender);
     throw new Error("Diese Seite gibt es nicht.");
   } catch (error) {
     renderError(error);
