@@ -283,7 +283,7 @@ body.timer-page.timer-locked { position: fixed; inset: 0; width: 100%; height: 1
 .timer-page .timer-actions .timer-control.danger { background: #fde7e5; color: #d92d20; outline-color: #f5beb9; }
 .timer-page .timer-actions .timer-control:disabled { color: #98a2b3; opacity: 1; outline-color: #e4e7ec; background: #eef0f3; }
 .timer-page .timer-actions.final-lap { justify-content: center; }
-.timer-page .timer-actions.final-lap .timer-control { width: 100%; min-height: 96px; height: 96px; border-radius: 26px; font-size: 20px; font-weight: 600; }
+.timer-page .timer-actions.final-lap .timer-control { width: 100%; min-height: 78px; height: 78px; border-radius: 22px; font-size: 20px; font-weight: 600; }
 .timer-page .lap-list.card { margin-top: 36px; border: 0; border-top: 1px solid #d8dde7; border-radius: 0; padding: 0; background: transparent; }
 .timer-page.timer-locked .lap-list.card { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .timer-page .lap-row { min-height: 44px; align-items: center; border-bottom-color: #d8dde7; padding: 6px 2px; color: #172033; font-size: 16px; }
