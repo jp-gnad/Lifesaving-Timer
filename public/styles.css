@@ -166,8 +166,14 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 .result-segments strong { color: var(--text); font-variant-numeric: tabular-nums; }
 
 .timer-shell { width: 100%; margin: 0 auto; }
-.timer-setup { display: grid; grid-template-columns: 1fr; gap: 8px; margin-bottom: 15px; }
-.clock-card { text-align: center; padding: 28px 12px 18px; }
+.timer-topbar { display: grid; grid-template-columns: auto 1fr; gap: 10px; margin-bottom: 12px; }
+.timer-topbar > .button { min-height: 54px; height: 54px; }
+.mode-button { min-height: 54px; border: 1px solid var(--line); border-radius: var(--radius); padding: 7px 12px; background: var(--surface); color: var(--text); display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; cursor: pointer; }
+.mode-button span { display: grid; }
+.mode-button strong { line-height: 1.25; }
+.mode-button small { color: var(--muted); font-size: 12px; }
+.mode-button:disabled { opacity: .6; cursor: not-allowed; }
+.clock-card { text-align: center; padding: 30px 12px 16px; }
 .clock-status { color: var(--muted); font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
 .clock {
   margin: 12px 0 26px;
@@ -178,15 +184,24 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
   letter-spacing: -.055em;
 }
 .timer-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.timer-actions .button { min-height: 68px; font-size: 17px; }
-.timer-actions .button:first-child { grid-column: 1 / -1; }
-.timer-secondary { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
-.progress-note { margin: 20px 0 0; color: var(--muted); }
+.timer-actions .timer-control { min-height: 84px; padding: 12px 8px; font-size: 18px; }
+.progress-note { margin: -10px 0 20px; color: var(--muted); font-size: 14px; }
 .lap-list { margin-top: 18px; }
 .lap-row { display: flex; justify-content: space-between; gap: 20px; padding: 11px 4px; border-bottom: 1px solid var(--line); }
+.lap-row:last-child { border-bottom: 0; }
 .lap-row strong { font-variant-numeric: tabular-nums; }
+.dialog-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.dialog-title-row h2 { margin: 0; }
+.discipline-list { display: grid; gap: 8px; }
+.discipline-choice { width: 100%; min-height: 58px; border: 1px solid var(--line); border-radius: 9px; padding: 9px 12px; background: var(--surface); color: var(--text); display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; cursor: pointer; }
+.discipline-choice > span:first-child { display: grid; }
+.discipline-choice small { color: var(--muted); }
+.discipline-choice.selected { border-color: var(--primary); background: #f4f8ff; }
+.choice-check { width: 24px; height: 24px; color: var(--primary); }
+.choice-check .icon { width: 24px; height: 24px; }
 
 .save-panel { margin-top: 20px; }
+.save-actions { grid-template-columns: 1fr; }
 .edit-times { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 20px; }
 .total-summary { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-top: 1px solid var(--line); font-size: 18px; }
 .total-summary strong { font-size: 24px; font-variant-numeric: tabular-nums; }

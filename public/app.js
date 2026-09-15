@@ -256,25 +256,29 @@ async function renderTimer(id) {
   };
 
   app.innerHTML = `
-    <div class="timer-shell"><a class="back" href="#/event/${id}">${icon("arrow-left")} ${escapeHtml(event.name)}</a>
-      <h1>Timer</h1>
-      <div class="timer-setup"><div class="field"><label for="discipline">Stoppmodus</label><select id="discipline">${disciplineOptions()}</select></div>
-        <span class="muted" id="lap-limit">Bis zu 20 Abschnitte</span></div>
+    <div class="timer-shell">
+      <div class="timer-topbar">
+        <a class="button secondary icon-button" href="#/event/${id}" aria-label="Zurück zu ${escapeHtml(event.name)}">${icon("arrow-left")}</a>
+        <button class="mode-button" id="mode-button" aria-haspopup="dialog"><span><strong id="mode-name">Normal</strong><small id="mode-laps">max. 20 Laps</small></span>${icon("chevron-down")}</button>
+      </div>
       <section class="card clock-card" aria-label="Stoppuhr">
         <div class="clock-status" id="clock-status">Bereit</div><div class="clock" id="clock" aria-live="off">00:00,00</div>
+        <p class="progress-note" id="progress">0 / 20 Laps</p>
         <div class="timer-actions">
-          <button class="button" id="start">${icon("play")} Start</button><button class="button secondary" id="lap" disabled>${icon("lap")} Lap</button><button class="button danger" id="stop" disabled>${icon("stop")} Stopp</button>
+          <button class="button secondary timer-control" id="left-action" disabled>${icon("trash")} Löschen</button>
+          <button class="button timer-control" id="right-action">${icon("play")} Start</button>
         </div>
-        <div class="timer-secondary"><button class="button secondary small" id="undo" disabled>${icon("undo")} Lap zurück</button><button class="button secondary small" id="abort" disabled>${icon("x")} Verwerfen</button></div>
-        <p class="progress-note" id="progress">Bereit</p>
       </section>
       <div class="card lap-list" id="lap-list" hidden></div>
       <section class="card save-panel" id="save-panel" hidden></section>
+      <dialog id="discipline-dialog"><div class="dialog-body mode-dialog-body"><div class="dialog-title-row"><h2>Stoppmodus</h2><button class="button secondary icon-button" id="close-mode" aria-label="Menü schließen">${icon("x")}</button></div>
+        <div class="discipline-list">${Object.entries(disciplines).map(([disciplineId, item]) => `<button class="discipline-choice" data-discipline="${disciplineId}"><span><strong>${item.name}</strong><small>${item.flexible ? "max. " : ""}${item.laps} Laps</small></span><span class="choice-check">${disciplineId === "normal" ? icon("check") : ""}</span></button>`).join("")}</div>
+      </div></dialog>
     </div>`;
 
-  const elements = Object.fromEntries(["discipline", "clock-status", "clock", "start", "lap", "stop", "undo", "abort", "progress", "lap-list", "save-panel", "lap-limit"].map((key) => [key, document.querySelector(`#${key}`)]));
+  const elements = Object.fromEntries(["mode-button", "mode-name", "mode-laps", "discipline-dialog", "clock-status", "clock", "left-action", "right-action", "progress", "lap-list", "save-panel"].map((key) => [key, document.querySelector(`#${key}`)]));
 
-  const currentCs = () => timer.status === "running" ? Math.floor((performance.now() - timer.startedAt) / 10) : timer.displayed;
+  const currentCs = () => timer.status === "running" ? timer.displayed + Math.floor((performance.now() - timer.startedAt) / 10) : timer.displayed;
   const capturedTotal = () => timer.segments.reduce((sum, value) => sum + value, 0);
   const config = () => disciplines[timer.discipline];
 
@@ -285,16 +289,49 @@ async function renderTimer(id) {
 
   function renderLaps() {
     elements["lap-list"].hidden = timer.segments.length === 0;
-    elements["lap-list"].innerHTML = timer.segments.length ? `<h2>Abschnitte</h2>${timer.segments.map((value, index) =>
-      `<div class="lap-row"><span>Lap ${index + 1}</span><strong>${formatTime(value)}</strong></div>`).join("")}` : "";
+    elements["lap-list"].innerHTML = timer.segments.length ? timer.segments.map((value, index) =>
+      `<div class="lap-row"><span>Lap ${index + 1}</span><strong>${formatTime(value)}</strong></div>`).join("") : "";
   }
 
   function updateProgress() {
     const item = config();
-    elements.progress.textContent = timer.status === "idle" ? "Bereit" :
-      item.flexible ? `${timer.segments.length} von maximal ${item.laps} Abschnitten erfasst.` :
-      `${timer.segments.length} von ${item.laps} Abschnitten erfasst.`;
-    elements["lap-limit"].textContent = item.flexible ? `Bis zu ${item.laps} Abschnitte` : `${item.laps} Abschnitte fest vorgegeben`;
+    elements.progress.textContent = `${timer.segments.length} / ${item.flexible ? "max. " : ""}${item.laps} Laps`;
+  }
+
+  function updateMode() {
+    const item = config();
+    elements["mode-name"].textContent = item.name;
+    elements["mode-laps"].textContent = `${item.flexible ? "max. " : ""}${item.laps} Laps`;
+    document.querySelectorAll(".discipline-choice").forEach((choice) => {
+      const selected = choice.dataset.discipline === timer.discipline;
+      choice.classList.toggle("selected", selected);
+      choice.querySelector(".choice-check").innerHTML = selected ? icon("check") : "";
+    });
+    updateProgress();
+  }
+
+  function setControl(button, label, iconName, style, disabled = false) {
+    button.className = `button timer-control ${style}`.trim();
+    button.innerHTML = `${icon(iconName)} ${label}`;
+    button.disabled = disabled;
+  }
+
+  function updateControls() {
+    const item = config();
+    if (timer.status === "idle") {
+      setControl(elements["left-action"], "Löschen", "trash", "secondary", true);
+      setControl(elements["right-action"], "Start", "play", "", false);
+      return;
+    }
+    if (timer.status === "running") {
+      const lapLimitReached = timer.segments.length >= item.laps - 1;
+      const stopLocked = !item.flexible && !lapLimitReached;
+      setControl(elements["left-action"], "Runde", "lap", "secondary", lapLimitReached);
+      setControl(elements["right-action"], "Stopp", "stop", "danger", stopLocked);
+      return;
+    }
+    setControl(elements["left-action"], "Löschen", "trash", "danger", false);
+    setControl(elements["right-action"], "Weiter", "play", "", false);
   }
 
   function resetTimer() {
@@ -302,15 +339,9 @@ async function renderTimer(id) {
     Object.assign(timer, { status: "idle", startedAt: 0, displayed: 0, segments: [] });
     elements.clock.textContent = "00:00,00";
     elements["clock-status"].textContent = "Bereit";
-    elements.start.disabled = false;
-    elements.start.hidden = false;
-    elements.lap.disabled = true;
-    elements.stop.disabled = true;
-    elements.undo.disabled = true;
-    elements.abort.disabled = true;
-    elements.discipline.disabled = false;
+    elements["mode-button"].disabled = false;
     elements["save-panel"].hidden = true;
-    renderLaps(); updateProgress();
+    renderLaps(); updateProgress(); updateControls();
   }
 
   function addSegment() {
@@ -332,7 +363,7 @@ async function renderTimer(id) {
         `<option value="${person.id}">${escapeHtml(person.name)} · ${escapeHtml(person.age_group)} · ${escapeHtml(person.organization)}</option>`).join("")}</select></div>
       ${participants.length ? "" : `<p class="notice">Zuerst eine Person im Event hinzufügen.</p>`}
       <p class="form-error" id="save-error" role="alert"></p>
-      <div class="form-actions"><button class="button secondary" id="new-attempt">${icon("x")} Verwerfen</button><button class="button" id="save-result" ${participants.length ? "" : "disabled"}>${icon("save")} Speichern</button></div>`;
+      <div class="form-actions save-actions"><button class="button" id="save-result" ${participants.length ? "" : "disabled"}>${icon("save")} Speichern</button></div>`;
 
     const inputs = [...panel.querySelectorAll(".segment-input")];
     function readCorrections(showError = false) {
@@ -343,7 +374,6 @@ async function renderTimer(id) {
       return invalid ? null : values;
     }
     inputs.forEach((input) => input.addEventListener("input", () => readCorrections(false)));
-    panel.querySelector("#new-attempt").addEventListener("click", resetTimer);
     panel.querySelector("#save-result").addEventListener("click", async (event) => {
       const segments = readCorrections(true);
       const participantId = panel.querySelector("#participant").value;
@@ -364,57 +394,55 @@ async function renderTimer(id) {
     panel.scrollIntoView({ behavior: "auto", block: "nearest" });
   }
 
-  elements.discipline.addEventListener("change", () => { timer.discipline = elements.discipline.value; updateProgress(); });
-  elements.start.addEventListener("click", () => {
+  bindDialogClose(elements["discipline-dialog"]);
+  elements["mode-button"].addEventListener("click", () => openDialog("#discipline-dialog"));
+  document.querySelector("#close-mode").addEventListener("click", () => elements["discipline-dialog"].close());
+  document.querySelectorAll(".discipline-choice").forEach((choice) => choice.addEventListener("click", () => {
+    timer.discipline = choice.dataset.discipline;
+    updateMode();
+    elements["discipline-dialog"].close();
+  }));
+
+  elements["left-action"].addEventListener("click", () => {
+    if (timer.status === "stopped") {
+      resetTimer();
+      return;
+    }
+    if (timer.status !== "running" || !addSegment()) return;
+    updateControls();
+  });
+
+  elements["right-action"].addEventListener("click", () => {
+    if (timer.status === "idle") {
+      timer.status = "running";
+      timer.startedAt = performance.now();
+      timer.displayed = 0;
+      timer.segments = [];
+      elements["clock-status"].textContent = "Läuft";
+      elements["mode-button"].disabled = true;
+      updateProgress(); updateControls(); drawClock();
+      return;
+    }
+    if (timer.status === "running") {
+      timer.displayed = currentCs();
+      if (!addSegment()) return;
+      timer.status = "stopped";
+      cancelAnimationFrame(animationFrame);
+      elements.clock.textContent = formatTime(timer.displayed);
+      elements["clock-status"].textContent = "Gestoppt";
+      updateProgress(); updateControls(); renderSavePanel();
+      return;
+    }
+    timer.segments.pop();
     timer.status = "running";
     timer.startedAt = performance.now();
-    timer.segments = [];
     elements["clock-status"].textContent = "Läuft";
-    elements.start.disabled = true;
-    elements.start.hidden = true;
-    elements.lap.disabled = false;
-    elements.stop.disabled = !config().flexible;
-    elements.undo.disabled = true;
-    elements.abort.disabled = false;
-    elements.discipline.disabled = true;
-    updateProgress(); drawClock();
+    elements["save-panel"].hidden = true;
+    renderLaps(); updateProgress(); updateControls(); drawClock();
   });
-  elements.lap.addEventListener("click", () => {
-    const item = config();
-    const maxIntermediate = item.laps - 1;
-    if (timer.segments.length >= maxIntermediate || !addSegment()) return;
-    elements.undo.disabled = false;
-    if (!item.flexible && timer.segments.length === maxIntermediate) {
-      elements.lap.disabled = true;
-      elements.stop.disabled = false;
-    }
-    if (item.flexible && timer.segments.length === maxIntermediate) elements.lap.disabled = true;
-  });
-  elements.undo.addEventListener("click", () => {
-    if (timer.status !== "running" || !timer.segments.length) return;
-    timer.segments.pop();
-    elements.lap.disabled = false;
-    elements.stop.disabled = !config().flexible && timer.segments.length !== config().laps - 1;
-    elements.undo.disabled = timer.segments.length === 0;
-    renderLaps(); updateProgress();
-  });
-  elements.stop.addEventListener("click", () => {
-    if (timer.status !== "running") return;
-    timer.displayed = currentCs();
-    if (!addSegment()) return;
-    timer.status = "stopped";
-    cancelAnimationFrame(animationFrame);
-    elements.clock.textContent = formatTime(timer.displayed);
-    elements["clock-status"].textContent = "Gestoppt";
-    elements.lap.disabled = true;
-    elements.stop.disabled = true;
-    elements.undo.disabled = true;
-    elements.abort.disabled = true;
-    updateProgress(); renderSavePanel();
-  });
-  elements.abort.addEventListener("click", () => {
-    if (confirm("Diesen laufenden Versuch wirklich verwerfen?")) resetTimer();
-  });
+
+  updateMode();
+  updateControls();
 }
 
 async function renderViewer(id) {
