@@ -15,7 +15,7 @@ const disciplines = {
   rescueTubeRelay4x50: { name: "4 × 50 m Gurtretterstaffel", laps: 4, group: "team", team: true },
   rescueRelay4x50: { name: "4 × 50 m Rettungsstaffel", laps: 4, group: "team", team: true },
   obstacleRelay4x50: { name: "4 × 50 m Hindernisstaffel", laps: 4, group: "team", team: true },
-  mixedRelay4x50: { name: "4 × 50 m Mixed Staffel", laps: 4, group: "team", team: true },
+  mixedRelay4x50: { name: "4 × 50 m Mixed Staffel", laps: 4, group: "team", team: true, mixed: true },
   lineThrow: { name: "LineThrow", laps: 2, group: "team", team: true },
 };
 
@@ -935,7 +935,9 @@ async function renderTimer(id) {
 
 async function renderViewer(id, initialDiscipline = null, initialGender = null) {
   const { event } = await api(`/events/${id}`);
-  let selected = disciplines[initialDiscipline] && ["female", "male"].includes(initialGender)
+  const initialItem = disciplines[initialDiscipline];
+  const validInitialGender = initialItem?.mixed ? initialGender === "mixed" : ["female", "male"].includes(initialGender);
+  let selected = initialItem && validInitialGender
     ? { discipline: initialDiscipline, gender: initialGender }
     : null;
   setDocumentTitle(`Ergebnisse – ${event.name}`);
@@ -954,7 +956,7 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
   let allResults = [];
   let resultView = "cards";
 
-  const genderName = (gender) => gender === "female" ? "Weiblich" : "Männlich";
+  const genderName = (gender) => gender === "female" ? "Weiblich" : (gender === "male" ? "Männlich" : "Mixed");
 
   function renderSelection() {
     overviewHead.hidden = false;
@@ -975,7 +977,9 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
       : `<span class="result-choice-space" aria-hidden="true"></span>`;
     resultsRoot.innerHTML = availableDisciplines.length
       ? `<div class="result-selection" aria-label="Ergebnisgruppen">${availableDisciplines.map(({ disciplineId, item, femaleCount, maleCount }) =>
-        `<div class="result-selection-row">${resultButton(disciplineId, item, "female", femaleCount)}${resultButton(disciplineId, item, "male", maleCount)}</div>`
+        item.mixed
+          ? `<div class="result-selection-row"><button class="result-choice mixed" data-discipline="${disciplineId}" data-gender="mixed" aria-label="${escapeHtml(item.name)}, Mixed, ${femaleCount + maleCount} Ergebnisse"><strong>${escapeHtml(item.name)}</strong><span>Mixed</span></button></div>`
+          : `<div class="result-selection-row">${resultButton(disciplineId, item, "female", femaleCount)}${resultButton(disciplineId, item, "male", maleCount)}</div>`
       ).join("")}</div>`
       : `<div class="empty">Noch keine Ergebnisse.</div>`;
     resultsRoot.querySelectorAll(".result-choice").forEach((button) => button.addEventListener("click", () => {
@@ -988,7 +992,7 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
     const item = disciplines[selected.discipline];
     overviewHead.hidden = true;
     setDocumentTitle(`${item.name} · ${genderName(selected.gender)} – ${event.name}`);
-    const results = allResults.filter((result) => result.discipline === selected.discipline && result.gender === selected.gender);
+    const results = allResults.filter((result) => result.discipline === selected.discipline && (item.mixed || result.gender === selected.gender));
     const lapCount = results.reduce((maximum, result) => {
       const coveredLaps = resultLapGroups(result).flat();
       return Math.max(maximum, coveredLaps.length ? Math.max(...coveredLaps) : result.segments.length);

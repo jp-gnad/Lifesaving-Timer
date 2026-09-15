@@ -270,6 +270,7 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 .result-choice { width: 100%; min-width: 0; min-height: 68px; border: 1px solid #b9cff1; border-radius: 9px; padding: 10px 8px; background: #eef5ff; color: var(--primary-dark); cursor: pointer; display: grid; place-content: center; text-align: center; line-height: 1.15; }
 .result-choice.female { border-color: #efb8bd; background: #fff0f2; color: #a61b2b; }
 .result-choice.male { border-color: #b9cff1; background: #eef5ff; color: var(--primary-dark); }
+.result-choice.mixed { grid-column: 1 / -1; border-color: #c8ced8; background: #eef0f3; color: #3f4858; }
 .result-choice strong { min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
 .result-choice span { margin-top: 5px; font-size: 12px; font-weight: 700; }
 .result-choice-space { min-width: 0; min-height: 68px; }
