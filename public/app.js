@@ -1,5 +1,7 @@
 const app = document.querySelector("#app");
 const toast = document.querySelector("#toast");
+const viewportMeta = document.querySelector('meta[name="viewport"]');
+const defaultViewport = viewportMeta.content;
 
 const disciplines = {
   normal: { name: "Normal", laps: 20, flexible: true },
@@ -75,6 +77,13 @@ function disciplineOptions(selected = "normal") {
 
 function setDocumentTitle(title) {
   document.title = title ? `${title} · Lifesaving Timer` : "Lifesaving Timer";
+}
+
+function setTimerInteractionLock(locked) {
+  document.body.classList.toggle("timer-locked", locked);
+  viewportMeta.content = locked
+    ? "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    : defaultViewport;
 }
 
 function renderError(error, back = "#/", backText = "Zurück zur Übersicht") {
@@ -362,6 +371,7 @@ async function renderTimer(id) {
     elements["timer-view"].hidden = false;
     elements["review-view"].hidden = true;
     elements["review-view"].innerHTML = "";
+    setTimerInteractionLock(true);
     setDocumentTitle(`Timer – ${event.name}`);
     renderLaps(); updateProgress(); updateControls();
   }
@@ -377,6 +387,7 @@ async function renderTimer(id) {
 
   function showReview() {
     const review = elements["review-view"];
+    setTimerInteractionLock(false);
     elements["timer-view"].hidden = true;
     review.hidden = false;
     setDocumentTitle(`Ergebnis prüfen – ${event.name}`);
@@ -408,6 +419,7 @@ async function renderTimer(id) {
       }
       review.hidden = true;
       elements["timer-view"].hidden = false;
+      setTimerInteractionLock(true);
       setDocumentTitle(`Timer – ${event.name}`);
       renderLaps(); updateProgress();
     });
@@ -482,6 +494,7 @@ async function renderTimer(id) {
 
   updateMode();
   updateControls();
+  setTimerInteractionLock(true);
 }
 
 async function renderViewer(id) {
@@ -564,6 +577,7 @@ async function renderRoute() {
   app.innerHTML = `<div class="loading">Wird geladen …</div>`;
   const current = route();
   document.body.classList.toggle("timer-page", current.page === "timer");
+  setTimerInteractionLock(false);
   try {
     if (current.page === "home") return await renderHome();
     if (!current.id) throw new Error("Die Adresse ist unvollständig.");

@@ -217,6 +217,8 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 
 /* iOS-inspirierte Stoppuhransicht */
 body.timer-page { background: #000; color: #f5f5f7; }
+body.timer-page.timer-locked { position: fixed; inset: 0; width: 100%; height: 100dvh; overflow: hidden; overscroll-behavior: none; }
+.timer-page.timer-locked .container { height: 100dvh; overflow: hidden; }
 .timer-page .site-header { display: none; }
 .timer-page .container { width: min(430px, 100%); min-height: 100dvh; padding: max(12px, env(safe-area-inset-top)) 16px max(32px, env(safe-area-inset-bottom)); background: #000; }
 .timer-page .loading { color: #8e8e93; }
@@ -236,7 +238,7 @@ body.timer-page { background: #000; color: #f5f5f7; }
 .timer-page .timer-actions.final-lap { justify-content: center; }
 .timer-page .timer-actions.final-lap .timer-control { width: 136px; min-height: 136px; height: 136px; font-size: 20px; font-weight: 600; }
 .timer-page .lap-list.card { margin-top: 36px; border: 0; border-top: 1px solid #38383a; border-radius: 0; padding: 0; background: transparent; }
-.timer-page .lap-row { min-height: 52px; align-items: center; border-bottom-color: #38383a; padding: 10px 2px; color: #fff; font-size: 16px; }
+.timer-page .lap-row { min-height: 44px; align-items: center; border-bottom-color: #38383a; padding: 6px 2px; color: #fff; font-size: 16px; }
 .timer-page .lap-row.fastest { color: #30d158; }
 .timer-page .lap-row.slowest { color: #ff453a; }
 .timer-page .review-view { min-height: calc(100dvh - 24px); color: #fff; }
