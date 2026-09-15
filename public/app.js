@@ -214,16 +214,16 @@ async function renderEvent(id) {
       <p class="lead">${event.location ? escapeHtml(event.location) : "Kein Ort angegeben"} · ${participants.length} Personen</p></div>
       <button class="button danger small" id="delete-event">${icon("trash")} Löschen</button>
     </div>
-    <div class="grid">
-      <article class="card action-card"><span class="action-icon">${icon("timer")}</span><h2>Timer</h2><p>Stoppen und Laps erfassen</p><a class="button" href="#/timer/${id}">${icon("play")} Öffnen</a></article>
-      <article class="card action-card"><span class="action-icon">${icon("eye")}</span><h2>Ergebnisse</h2><p>Ranglisten live ansehen</p><a class="button secondary" href="#/viewer/${id}">${icon("eye")} Öffnen</a></article>
+    <div class="event-action-grid">
+      <a class="card event-action-tile" href="#/timer/${id}"><span class="event-action-icon">${icon("timer")}</span><strong>Timer</strong></a>
+      <a class="card event-action-tile" href="#/viewer/${id}"><span class="event-action-icon">${icon("table")}</span><strong>Ergebnisse</strong></a>
     </div>
     <section class="section" aria-labelledby="people-heading">
       <div class="section-head"><h2 id="people-heading">Personen</h2><button class="button secondary" id="new-person">${icon("user-plus")} Hinzufügen</button></div>
       ${participants.length ? `<div class="person-list">
         ${participants.map((person) => `<article class="person-card">
-          <div class="person-head"><strong>${escapeHtml(person.name)}</strong><div class="person-actions"><button class="button secondary small icon-button edit-person" data-id="${person.id}" aria-label="${escapeHtml(person.name)} bearbeiten" title="Bearbeiten">${icon("pencil")}</button><button class="button danger small icon-button delete-person" data-id="${person.id}" data-name="${escapeHtml(person.name)}" data-results="${person.result_count}" aria-label="${escapeHtml(person.name)} löschen" title="Löschen">${icon("trash")}</button></div></div>
-          <div class="person-details"><span>${person.gender === "male" ? "Männlich" : "Weiblich"} · Jg. ${person.birth_year} · ${escapeHtml(person.age_group)}</span><span>${escapeHtml(person.organization)}</span><span>${person.result_count} ${person.result_count === 1 ? "Ergebnis" : "Ergebnisse"}</span></div>
+          <div class="person-head"><strong>${escapeHtml(person.name)} (${String(person.birth_year).slice(-2)})</strong><div class="person-actions"><button class="button secondary small icon-button edit-person" data-id="${person.id}" aria-label="${escapeHtml(person.name)} bearbeiten" title="Bearbeiten">${icon("pencil")}</button><button class="button danger small icon-button delete-person" data-id="${person.id}" data-name="${escapeHtml(person.name)}" data-results="${person.result_count}" aria-label="${escapeHtml(person.name)} löschen" title="Löschen">${icon("trash")}</button></div></div>
+          <div class="person-details"><span>${escapeHtml(person.organization)} - ${escapeHtml(person.age_group)} - ${person.gender === "male" ? "m" : "w"}</span></div>
         </article>`).join("")}</div>` : `<div class="empty">Noch keine Personen.</div>`}
     </section>
     <dialog id="person-dialog"><form class="dialog-body" id="person-form">
@@ -887,17 +887,14 @@ async function renderViewer(id) {
       const key = `${result.discipline}:${result.gender}`;
       counts.set(key, (counts.get(key) || 0) + 1);
     });
-    resultsRoot.innerHTML = `<div class="result-selection" aria-label="Ergebnisgruppen">
-      <div class="result-selection-head"><strong>Weiblich</strong><strong>Männlich</strong></div>
-      ${Object.entries(disciplines).map(([disciplineId, item]) => `<div class="result-selection-row">
-        ${["female", "male"].map((gender) => {
-          const count = counts.get(`${disciplineId}:${gender}`) || 0;
-          return count
-            ? `<button class="result-choice" data-discipline="${disciplineId}" data-gender="${gender}" aria-label="${escapeHtml(item.name)}, ${genderName(gender)}, ${count} ${count === 1 ? "Ergebnis" : "Ergebnisse"}"><strong>${count}</strong><span>${escapeHtml(item.name)}</span></button>`
-            : `<span class="result-choice-empty" aria-label="Keine Ergebnisse">–</span>`;
-        }).join("")}
-      </div>`).join("")}
-    </div>`;
+    const availableGroups = Object.entries(disciplines).flatMap(([disciplineId, item]) =>
+      ["female", "male"].map((gender) => ({ disciplineId, item, gender, count: counts.get(`${disciplineId}:${gender}`) || 0 }))
+    ).filter((group) => group.count > 0);
+    resultsRoot.innerHTML = availableGroups.length
+      ? `<div class="result-selection" aria-label="Ergebnisgruppen">${availableGroups.map(({ disciplineId, item, gender, count }) =>
+        `<button class="result-choice ${gender === "female" ? "female" : "male"}" data-discipline="${disciplineId}" data-gender="${gender}" aria-label="${escapeHtml(item.name)}, ${genderName(gender)}, ${count} ${count === 1 ? "Ergebnis" : "Ergebnisse"}"><strong>${escapeHtml(item.name)}</strong><span>${genderName(gender)}</span></button>`
+      ).join("")}</div>`
+      : `<div class="empty">Noch keine Ergebnisse.</div>`;
     resultsRoot.querySelectorAll(".result-choice").forEach((button) => button.addEventListener("click", () => {
       selected = { discipline: button.dataset.discipline, gender: button.dataset.gender };
       renderContent();
