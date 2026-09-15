@@ -12,7 +12,7 @@
     {
       "binding": "DB",
       "database_name": "lifesaving-timer-db",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "251e37af-243f-478d-90c9-fd4840e787ba",
       "migrations_dir": "migrations"
     }
   ],

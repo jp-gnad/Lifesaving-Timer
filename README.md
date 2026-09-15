@@ -11,7 +11,7 @@ Eine bewusst einfache, helle Web-App zur Zeitnahme im Rettungssport. Events, Per
 - Letzten Lap zurücknehmen, Versuch verwerfen und Abschnittszeiten korrigieren
 - Feste Lap-Anzahl je Disziplin; Normalmodus mit bis zu 20 Laps
 - Zuordnung der Person erst nach dem Stoppen
-- Live-Rangliste nach Disziplin und Geschlecht, automatisch alle 3 Sekunden aktualisiert
+- Live-Rangliste nach Disziplin und Geschlecht, automatisch jede Minute oder manuell frühestens alle 10 Sekunden aktualisiert
 - Speicherung im Format `mm:ss,00` (intern auf Hundertstelsekunden genau)
 
 ## Technik

@@ -12,6 +12,7 @@ const disciplines = {
 };
 
 let refreshTimer = null;
+let cooldownTimer = null;
 let animationFrame = null;
 let toastTimer = null;
 
@@ -396,7 +397,8 @@ async function renderViewer(id) {
   app.innerHTML = `
     <a class="back" href="#/event/${id}">← ${escapeHtml(event.name)}</a>
     <div class="page-head"><div><p class="eyebrow">Live-Viewer</p><h1>Ergebnisse</h1><p class="lead">Schnellste Gesamtzeit zuerst.</p></div>
-      <div class="live-note"><span class="live-dot"></span><span id="live-status">Live · automatische Aktualisierung</span></div></div>
+      <div class="viewer-refresh"><div class="live-note"><span class="live-dot"></span><span id="live-status">Live · jede Minute</span></div>
+      <button class="button secondary small" id="refresh-results">Jetzt aktualisieren</button></div></div>
     <div class="filters"><div class="field"><label for="viewer-discipline">Disziplin</label><select id="viewer-discipline">${disciplineOptions()}</select></div>
       <div class="field"><label for="viewer-gender">Geschlecht</label><select id="viewer-gender"><option value="female">Weiblich</option><option value="male">Männlich</option></select></div></div>
     <div id="results"><div class="loading">Ergebnisse werden geladen …</div></div>`;
@@ -404,7 +406,27 @@ async function renderViewer(id) {
   const discipline = document.querySelector("#viewer-discipline");
   const gender = document.querySelector("#viewer-gender");
   const resultsRoot = document.querySelector("#results");
+  const refreshButton = document.querySelector("#refresh-results");
   let loading = false;
+
+  function startManualCooldown() {
+    const readyAt = Date.now() + 10_000;
+    refreshButton.disabled = true;
+    clearInterval(cooldownTimer);
+    const updateButton = () => {
+      const remaining = Math.ceil((readyAt - Date.now()) / 1000);
+      if (remaining <= 0) {
+        clearInterval(cooldownTimer);
+        cooldownTimer = null;
+        refreshButton.disabled = false;
+        refreshButton.textContent = "Jetzt aktualisieren";
+      } else {
+        refreshButton.textContent = `Erneut in ${remaining} s`;
+      }
+    };
+    updateButton();
+    cooldownTimer = setInterval(updateButton, 1000);
+  }
 
   async function loadResults(silent = false) {
     if (loading) return;
@@ -430,13 +452,19 @@ async function renderViewer(id) {
   }
   discipline.addEventListener("change", () => loadResults());
   gender.addEventListener("change", () => loadResults());
+  refreshButton.addEventListener("click", () => {
+    startManualCooldown();
+    loadResults();
+  });
   await loadResults();
-  refreshTimer = setInterval(() => loadResults(true), 3000);
+  refreshTimer = setInterval(() => loadResults(true), 60_000);
 }
 
 async function renderRoute() {
   clearInterval(refreshTimer);
   refreshTimer = null;
+  clearInterval(cooldownTimer);
+  cooldownTimer = null;
   cancelAnimationFrame(animationFrame);
   app.innerHTML = `<div class="loading">Wird geladen …</div>`;
   const current = route();
