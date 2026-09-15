@@ -269,7 +269,6 @@ async function renderTimer(id) {
           <button class="button secondary timer-control" id="left-action" disabled>${icon("trash")} Löschen</button>
           <button class="button timer-control" id="right-action">${icon("play")} Start</button>
         </div>
-        <button class="button save-attempt" id="open-review" hidden>${icon("save")} Speichern</button>
       </section>
       <div class="card lap-list" id="lap-list" hidden></div>
       <dialog id="discipline-dialog"><div class="dialog-body mode-dialog-body"><div class="dialog-title-row"><h2>Stoppmodus</h2><button class="button secondary icon-button" id="close-mode" aria-label="Menü schließen">${icon("x")}</button></div>
@@ -279,7 +278,7 @@ async function renderTimer(id) {
       <section class="review-view" id="review-view" hidden></section>
     </div>`;
 
-  const elements = Object.fromEntries(["timer-view", "review-view", "open-review", "mode-button", "mode-name", "mode-laps", "discipline-dialog", "clock-status", "clock", "left-action", "right-action", "progress", "lap-list"].map((key) => [key, document.querySelector(`#${key}`)]));
+  const elements = Object.fromEntries(["timer-view", "review-view", "mode-button", "mode-name", "mode-laps", "discipline-dialog", "clock-status", "clock", "left-action", "right-action", "progress", "lap-list"].map((key) => [key, document.querySelector(`#${key}`)]));
 
   const currentCs = () => timer.status === "running" ? timer.displayed + Math.floor((performance.now() - timer.startedAt) / 10) : timer.displayed;
   const capturedTotal = () => timer.segments.reduce((sum, value) => sum + value, 0);
@@ -331,6 +330,9 @@ async function renderTimer(id) {
 
   function updateControls() {
     const item = config();
+    const actions = elements["left-action"].parentElement;
+    elements["left-action"].hidden = false;
+    actions.classList.remove("final-lap");
     if (timer.status === "idle") {
       setControl(elements["left-action"], "Löschen", "trash", "secondary", true);
       setControl(elements["right-action"], "Start", "play", "", false);
@@ -341,6 +343,10 @@ async function renderTimer(id) {
       const stopLocked = !item.flexible && !lapLimitReached;
       setControl(elements["left-action"], "Runde", "lap", "secondary", lapLimitReached);
       setControl(elements["right-action"], "Stopp", "stop", "danger", stopLocked);
+      if (lapLimitReached) {
+        elements["left-action"].hidden = true;
+        actions.classList.add("final-lap");
+      }
       return;
     }
     setControl(elements["left-action"], "Löschen", "trash", "danger", false);
@@ -353,7 +359,6 @@ async function renderTimer(id) {
     elements.clock.textContent = "00:00,00";
     elements["clock-status"].textContent = "Bereit";
     elements["mode-button"].disabled = false;
-    elements["open-review"].hidden = true;
     elements["timer-view"].hidden = false;
     elements["review-view"].hidden = true;
     elements["review-view"].innerHTML = "";
@@ -434,8 +439,6 @@ async function renderTimer(id) {
     updateMode();
     elements["discipline-dialog"].close();
   }));
-  elements["open-review"].addEventListener("click", showReview);
-
   elements["left-action"].addEventListener("click", () => {
     if (timer.status === "stopped") {
       resetTimer();
@@ -466,15 +469,14 @@ async function renderTimer(id) {
       cancelAnimationFrame(animationFrame);
       elements.clock.textContent = formatTime(timer.displayed);
       elements["clock-status"].textContent = "Gestoppt";
-      elements["open-review"].hidden = false;
       renderLaps(); updateProgress(); updateControls();
+      showReview();
       return;
     }
     timer.segments.pop();
     timer.status = "running";
     timer.startedAt = performance.now();
     elements["clock-status"].textContent = "Läuft";
-    elements["open-review"].hidden = true;
     renderLaps(); updateProgress(); updateControls(); drawClock();
   });
 

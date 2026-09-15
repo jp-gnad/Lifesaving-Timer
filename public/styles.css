@@ -233,7 +233,8 @@ body.timer-page { background: #000; color: #f5f5f7; }
 .timer-page .timer-actions .timer-control.secondary { background: #2c2c2e; color: #fff; outline-color: #2c2c2e; }
 .timer-page .timer-actions .timer-control.danger { background: rgba(255, 69, 58, .18); color: #ff453a; outline-color: rgba(255, 69, 58, .28); }
 .timer-page .timer-actions .timer-control:disabled { color: #636366; opacity: 1; outline-color: #1c1c1e; background: #1c1c1e; }
-.timer-page .save-attempt { width: min(240px, 100%); margin: 30px auto 0; background: #0a84ff; }
+.timer-page .timer-actions.final-lap { justify-content: center; }
+.timer-page .timer-actions.final-lap .timer-control { width: 136px; min-height: 136px; height: 136px; font-size: 20px; font-weight: 600; }
 .timer-page .lap-list.card { margin-top: 36px; border: 0; border-top: 1px solid #38383a; border-radius: 0; padding: 0; background: transparent; }
 .timer-page .lap-row { min-height: 52px; align-items: center; border-bottom-color: #38383a; padding: 10px 2px; color: #fff; font-size: 16px; }
 .timer-page .lap-row.fastest { color: #30d158; }
