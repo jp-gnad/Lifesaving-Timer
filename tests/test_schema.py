@@ -9,7 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 class SchemaTest(unittest.TestCase):
     def setUp(self):
         self.db = sqlite3.connect(":memory:")
-        self.db.executescript((ROOT / "migrations" / "0001_initial.sql").read_text(encoding="utf-8"))
+        for migration in sorted((ROOT / "migrations").glob("*.sql")):
+            self.db.executescript(migration.read_text(encoding="utf-8"))
 
     def tearDown(self):
         self.db.close()
@@ -47,6 +48,32 @@ class SchemaTest(unittest.TestCase):
         self.db.execute("DELETE FROM events WHERE id = ?", ("event-1",))
         count = self.db.execute("SELECT COUNT(*) FROM participants").fetchone()[0]
         self.assertEqual(count, 0)
+
+    def test_team_result_has_four_ordered_members(self):
+        self.db.execute("INSERT INTO events (id, name) VALUES (?, ?)", ("event-1", "Testevent"))
+        for position in range(1, 5):
+            self.db.execute(
+                """INSERT INTO participants
+                   (id, event_id, name, birth_year, age_group, gender, organization)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (f"person-{position}", "event-1", f"Person {position}", 2000, "Offen", "male", "Teststadt"),
+            )
+        self.db.execute(
+            """INSERT INTO results
+               (id, event_id, participant_id, discipline, total_centiseconds, segments_json)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            ("result-1", "event-1", "person-1", "manikinRelay4x25", 6000, "[1500,1500,1500,1500]"),
+        )
+        for position in range(1, 5):
+            self.db.execute(
+                "INSERT INTO result_members (result_id, participant_id, position) VALUES (?, ?, ?)",
+                ("result-1", f"person-{position}", position),
+            )
+        members = self.db.execute(
+            "SELECT participant_id, position FROM result_members WHERE result_id = ? ORDER BY position",
+            ("result-1",),
+        ).fetchall()
+        self.assertEqual(members, [("person-1", 1), ("person-2", 2), ("person-3", 3), ("person-4", 4)])
 
     def test_invalid_gender_is_rejected(self):
         self.db.execute("INSERT INTO events (id, name) VALUES (?, ?)", ("event-1", "Testevent"))

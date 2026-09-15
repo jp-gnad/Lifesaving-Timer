@@ -4,14 +4,26 @@ const viewportMeta = document.querySelector('meta[name="viewport"]');
 const defaultViewport = viewportMeta.content;
 
 const disciplines = {
-  normal: { name: "Normal", laps: 20, flexible: true },
-  rescue50: { name: "50 m Retten", laps: 2 },
-  rescue100: { name: "100 m Retten", laps: 2 },
-  lifesaver100: { name: "100 m Lifesaver", laps: 3 },
-  medley100: { name: "100 m Kombi", laps: 3 },
-  superLifesaver200: { name: "200 m Super Lifesaver", laps: 7 },
-  obstacle200: { name: "200 m Hindernis", laps: 4 },
+  normal: { name: "Normal", laps: 20, flexible: true, group: "normal" },
+  rescue50: { name: "50 m Retten", laps: 2, group: "individual" },
+  rescue100: { name: "100 m Retten", laps: 2, group: "individual" },
+  lifesaver100: { name: "100 m Lifesaver", laps: 3, group: "individual" },
+  medley100: { name: "100 m Kombi", laps: 3, group: "individual" },
+  superLifesaver200: { name: "200 m Super Lifesaver", laps: 7, group: "individual" },
+  obstacle200: { name: "200 m Hindernis", laps: 4, group: "individual" },
+  manikinRelay4x25: { name: "4 × 25 m Puppenstaffel", laps: 4, group: "team", team: true },
+  rescueTubeRelay4x50: { name: "4 × 50 m Gurtretterstaffel", laps: 4, group: "team", team: true },
+  rescueRelay4x50: { name: "4 × 50 m Rettungsstaffel", laps: 4, group: "team", team: true },
+  obstacleRelay4x50: { name: "4 × 50 m Hindernisstaffel", laps: 4, group: "team", team: true },
+  mixedRelay4x50: { name: "4 × 50 m Mixed Staffel", laps: 4, group: "team", team: true },
+  lineThrow: { name: "LineThrow", laps: 2, group: "team", team: true },
 };
+
+const disciplineGroups = [
+  { id: "normal", name: "Normal" },
+  { id: "individual", name: "Einzel" },
+  { id: "team", name: "Mannschaft" },
+];
 
 let refreshTimer = null;
 let cooldownTimer = null;
@@ -63,10 +75,21 @@ function formatTime(centiseconds) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")},${String(hundredths).padStart(2, "0")}`;
 }
 
+function formatReviewTime(centiseconds) {
+  const safe = Math.max(0, Math.floor(Number(centiseconds) || 0));
+  return `${Math.floor(safe / 100)},${String(safe % 100).padStart(2, "0")}`;
+}
+
 function parseTime(value) {
   const match = String(value).trim().match(/^(\d{1,3}):([0-5]\d)[,.](\d{2})$/);
   if (!match) return null;
   return Number(match[1]) * 6000 + Number(match[2]) * 100 + Number(match[3]);
+}
+
+function parseReviewTime(value) {
+  const match = String(value).trim().match(/^(\d{1,7})[,.](\d{2})$/);
+  if (!match) return null;
+  return Number(match[1]) * 100 + Number(match[2]);
 }
 
 function disciplineOptions(selected = "normal") {
@@ -282,7 +305,7 @@ async function renderTimer(id) {
       </section>
       <div class="card lap-list" id="lap-list" hidden></div>
       <dialog id="discipline-dialog"><div class="dialog-body mode-dialog-body"><div class="dialog-title-row"><h2>Stoppmodus</h2><button class="button secondary icon-button" id="close-mode" aria-label="Menü schließen">${icon("x")}</button></div>
-        <div class="discipline-list">${Object.entries(disciplines).map(([disciplineId, item]) => `<button class="discipline-choice" data-discipline="${disciplineId}"><span><strong>${item.name}</strong><small>${item.flexible ? "max. " : ""}${item.laps} Laps</small></span><span class="choice-check">${disciplineId === "normal" ? icon("check") : ""}</span></button>`).join("")}</div>
+        <div class="discipline-groups">${disciplineGroups.map((group) => `<section class="discipline-group"><h3>${group.name}</h3><div class="discipline-list">${Object.entries(disciplines).filter(([, item]) => item.group === group.id).map(([disciplineId, item]) => `<button class="discipline-choice" data-discipline="${disciplineId}"><span><strong>${item.name}</strong><small>${item.flexible ? "max. " : ""}${item.laps} Laps</small></span><span class="choice-check">${disciplineId === "normal" ? icon("check") : ""}</span></button>`).join("")}</div></section>`).join("")}</div>
       </div></dialog>
       </div>
       <section class="review-view" id="review-view" hidden></section>
@@ -384,20 +407,24 @@ async function renderTimer(id) {
 
   function showReview() {
     const review = elements["review-view"];
+    const item = config();
+    const optionMarkup = () => participants.map((person) => `<option value="${person.id}">${escapeHtml(person.name)} · ${escapeHtml(person.age_group)} · ${escapeHtml(person.organization)}</option>`).join("");
+    const assignmentMarkup = item.team
+      ? `<fieldset class="team-assignment"><legend>Mannschaft</legend>${Array.from({ length: 4 }, (_, index) => `<div class="field"><label for="participant-${index + 1}">Position ${index + 1}</label><select class="participant-select" id="participant-${index + 1}"><option value="">Auswählen …</option>${optionMarkup()}</select></div>`).join("")}</fieldset>`
+      : `<div class="field"><label for="participant">Person</label><select class="participant-select" id="participant"><option value="">Auswählen …</option>${optionMarkup()}</select></div>`;
     setTimerInteractionLock(false);
     elements["timer-view"].hidden = true;
     review.hidden = false;
     setDocumentTitle(`Ergebnis prüfen – ${event.name}`);
-    review.innerHTML = `<div class="review-topbar"><button class="button secondary icon-button" id="close-review" aria-label="Zurück zum Timer">${icon("arrow-left")}</button><h1>Ergebnis prüfen</h1></div>
+    review.innerHTML = `<div class="review-topbar"><button class="button secondary icon-button" id="close-review" aria-label="Zurück zum Timer">${icon("arrow-left")}</button><h1>Ergebnis prüfen</h1><button class="button danger icon-button" id="discard-review" aria-label="Messung löschen" title="Messung löschen">${icon("trash")}</button></div>
       <div class="review-content">
-      <div class="edit-times">${timer.segments.map((value, index) => `<div class="field"><label for="segment-${index}">Runde ${index + 1}</label><input class="segment-input" id="segment-${index}" inputmode="decimal" value="${formatTime(value)}" aria-describedby="save-error"></div>`).join("")}</div>
-      <div class="total-summary"><span>Summe der Abschnitte</span><strong id="save-total">${formatTime(capturedTotal())}</strong></div>
-      <div class="field official-time-field"><label for="official-time">Offizielle Zeit</label><input id="official-time" inputmode="decimal" value="${formatTime(timer.officialTime ?? capturedTotal())}" aria-describedby="save-error"></div>
-      <div class="field"><label for="participant">Person</label><select id="participant"><option value="">Auswählen …</option>${participants.map((person) =>
-        `<option value="${person.id}">${escapeHtml(person.name)} · ${escapeHtml(person.age_group)} · ${escapeHtml(person.organization)}</option>`).join("")}</select>
-        <button class="button secondary" id="new-review-person" type="button">${icon("user-plus")} Neue Person</button></div>
+      <div class="edit-times">${timer.segments.map((value, index) => `<div class="field"><label for="segment-${index}">Runde ${index + 1}</label><input class="segment-input" id="segment-${index}" inputmode="decimal" value="${formatReviewTime(value)}" aria-describedby="save-error"></div>`).join("")}</div>
+      <div class="total-summary"><span>Summe der Abschnitte</span><strong id="save-total">${formatReviewTime(capturedTotal())}</strong></div>
+      <div class="field official-time-field"><label for="official-time">Offizielle Zeit</label><input id="official-time" inputmode="decimal" value="${formatReviewTime(timer.officialTime ?? capturedTotal())}" aria-describedby="save-error"></div>
+      ${assignmentMarkup}
+      <button class="button secondary add-review-person" id="new-review-person" type="button">${icon("user-plus")} Neue Person</button>
       <p class="form-error" id="save-error" role="alert"></p>
-      <div class="form-actions save-actions"><button class="button" id="save-result" ${participants.length ? "" : "disabled"}>${icon("save")} Ergebnis speichern</button></div></div>
+      <div class="form-actions save-actions"><button class="button" id="save-result" ${participants.length >= (item.team ? 4 : 1) ? "" : "disabled"}>${icon("save")} Ergebnis speichern</button></div></div>
       <dialog id="review-person-dialog"><form class="dialog-body" id="review-person-form">
         <div class="dialog-title-row"><h2>Neue Person</h2><button type="button" class="button secondary icon-button" data-close aria-label="Schließen">${icon("x")}</button></div>
         <div class="form-grid">
@@ -413,18 +440,18 @@ async function renderTimer(id) {
 
     const inputs = [...review.querySelectorAll(".segment-input")];
     const officialInput = review.querySelector("#official-time");
-    const participantSelect = review.querySelector("#participant");
+    const participantSelects = [...review.querySelectorAll(".participant-select")];
     const saveResult = review.querySelector("#save-result");
     const personDialog = review.querySelector("#review-person-dialog");
     const personForm = review.querySelector("#review-person-form");
     function readCorrections(showError = false) {
-      const segments = inputs.map((input) => parseTime(input.value));
-      const officialTime = parseTime(officialInput.value);
+      const segments = inputs.map((input) => parseReviewTime(input.value));
+      const officialTime = parseReviewTime(officialInput.value);
       const invalidSegments = segments.some((value) => value === null || value <= 0);
       const invalidOfficialTime = officialTime === null || officialTime <= 0;
-      review.querySelector("#save-total").textContent = invalidSegments ? "–" : formatTime(segments.reduce((sum, value) => sum + value, 0));
+      review.querySelector("#save-total").textContent = invalidSegments ? "–" : formatReviewTime(segments.reduce((sum, value) => sum + value, 0));
       review.querySelector("#save-error").textContent = showError && (invalidSegments || invalidOfficialTime)
-        ? `Bitte ${invalidSegments ? "alle Abschnittszeiten" : "die offizielle Zeit"} als mm:ss,00 eingeben.`
+        ? `Bitte ${invalidSegments ? "alle Abschnittszeiten" : "die offizielle Zeit"} als Sekunden, z. B. 61,00, eingeben.`
         : "";
       return invalidSegments || invalidOfficialTime ? null : { segments, officialTime };
     }
@@ -433,6 +460,7 @@ async function renderTimer(id) {
     bindDialogClose(personDialog);
     review.querySelector("#new-review-person").addEventListener("click", () => {
       personForm.reset();
+      personForm.querySelector('[type="submit"]').disabled = false;
       review.querySelector("#review-person-error").textContent = "";
       personDialog.showModal();
       personForm.elements.name.focus();
@@ -447,12 +475,15 @@ async function renderTimer(id) {
         const created = await api(`/events/${id}/participants`, { method: "POST", body: JSON.stringify(values) });
         const person = { id: created.id, name: values.name, birth_year: Number(values.birthYear), age_group: values.ageGroup, gender: values.gender, organization: values.organization };
         participants.push(person);
-        const option = document.createElement("option");
-        option.value = person.id;
-        option.textContent = `${person.name} · ${person.age_group} · ${person.organization}`;
-        participantSelect.append(option);
-        participantSelect.value = person.id;
-        saveResult.disabled = false;
+        participantSelects.forEach((select) => {
+          const option = document.createElement("option");
+          option.value = person.id;
+          option.textContent = `${person.name} · ${person.age_group} · ${person.organization}`;
+          select.append(option);
+        });
+        const emptySelect = participantSelects.find((select) => !select.value) || participantSelects[0];
+        emptySelect.value = person.id;
+        saveResult.disabled = participants.length < (item.team ? 4 : 1);
         personDialog.close();
         showToast("Person wurde hinzugefügt und ausgewählt.");
       } catch (err) {
@@ -474,16 +505,21 @@ async function renderTimer(id) {
       setDocumentTitle(`Timer – ${event.name}`);
       renderLaps(); updateProgress();
     });
+    review.querySelector("#discard-review").addEventListener("click", resetTimer);
     saveResult.addEventListener("click", async (event) => {
       const corrections = readCorrections(true);
-      const participantId = participantSelect.value;
-      if (!corrections || !participantId) {
-        if (!participantId) review.querySelector("#save-error").textContent = "Bitte eine Person auswählen.";
+      const participantIds = participantSelects.map((select) => select.value);
+      const missingAssignment = participantIds.some((participantId) => !participantId);
+      const duplicateAssignment = item.team && new Set(participantIds).size !== participantIds.length;
+      if (!corrections || missingAssignment || duplicateAssignment) {
+        if (missingAssignment) review.querySelector("#save-error").textContent = item.team ? "Bitte alle vier Positionen besetzen." : "Bitte eine Person auswählen.";
+        else if (duplicateAssignment) review.querySelector("#save-error").textContent = "Jede Person darf nur eine Position besetzen.";
         return;
       }
       try {
         event.currentTarget.disabled = true;
-        await api(`/events/${id}/results`, { method: "POST", body: JSON.stringify({ participantId, discipline: timer.discipline, segments: corrections.segments, officialTime: corrections.officialTime }) });
+        const assignment = item.team ? { participantIds } : { participantId: participantIds[0] };
+        await api(`/events/${id}/results`, { method: "POST", body: JSON.stringify({ ...assignment, discipline: timer.discipline, segments: corrections.segments, officialTime: corrections.officialTime }) });
         showToast("Ergebnis wurde gespeichert. Bereit für die nächste Person.");
         resetTimer();
       } catch (err) {
@@ -599,19 +635,31 @@ async function renderViewer(id) {
     const results = allResults.filter((result) => result.discipline === selected.discipline && result.gender === selected.gender);
     const lapCount = results.reduce((maximum, result) => Math.max(maximum, result.segments.length), 0);
     const cardView = `<div class="result-list">
-      ${results.map((result, index) => `<article class="result-card">
-        <div class="result-head"><span class="rank-badge">${index + 1}</span><div><strong>${escapeHtml(result.participant_name)}</strong><div class="result-meta">Jg. ${result.birth_year} · ${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}</div></div>
-        <button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis von ${escapeHtml(result.participant_name)} löschen" title="Löschen">${icon("trash")}</button></div>
+      ${results.map((result, index) => {
+        const teamMembers = result.team_members || [];
+        const displayName = teamMembers.length ? "Mannschaft" : result.participant_name;
+        const details = teamMembers.length
+          ? `<div class="result-team-members">${teamMembers.map((member) => `<span>${member.position}. ${escapeHtml(member.name)}</span>`).join("")}</div>`
+          : `<div class="result-meta">Jg. ${result.birth_year} · ${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}</div>`;
+        return `<article class="result-card">
+        <div class="result-head"><span class="rank-badge">${index + 1}</span><div><strong>${escapeHtml(displayName)}</strong>${details}</div>
+        <button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis ${index + 1} löschen" title="Löschen">${icon("trash")}</button></div>
         <div class="result-time">${formatTime(result.total_centiseconds)}</div>
         <div class="result-segments">${result.segments.map((value, lap) => `<span>Lap ${lap + 1}<strong>${formatTime(value)}</strong></span>`).join("")}</div>
-      </article>`).join("")}</div>`;
+      </article>`;
+      }).join("")}</div>`;
     const tableView = `<div class="result-table-wrap"><table class="result-table">
       <caption class="sr-only">Ergebnisse ${escapeHtml(item.name)}, ${genderName(selected.gender)}</caption>
       <thead><tr><th>Person</th><th>Offizielle Zeit</th>${Array.from({ length: lapCount }, (_, lap) => `<th>Lap ${lap + 1}</th>`).join("")}<th><span class="sr-only">Aktionen</span></th></tr></thead>
-      <tbody>${results.map((result, index) => `<tr><td><strong>${index + 1}. ${escapeHtml(result.participant_name)}</strong><small>Jg. ${result.birth_year} · ${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}</small></td>
+      <tbody>${results.map((result, index) => {
+        const teamMembers = result.team_members || [];
+        const displayName = teamMembers.length ? "Mannschaft" : result.participant_name;
+        const details = teamMembers.length ? teamMembers.map((member) => `${member.position}. ${escapeHtml(member.name)}`).join("<br>") : `Jg. ${result.birth_year} · ${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}`;
+        return `<tr><td><strong>${index + 1}. ${escapeHtml(displayName)}</strong><small>${details}</small></td>
         <td class="official-result">${formatTime(result.total_centiseconds)}</td>
         ${Array.from({ length: lapCount }, (_, lap) => `<td>${result.segments[lap] ? formatTime(result.segments[lap]) : "–"}</td>`).join("")}
-        <td><button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis von ${escapeHtml(result.participant_name)} löschen" title="Löschen">${icon("trash")}</button></td></tr>`).join("")}</tbody>
+        <td><button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis ${index + 1} löschen" title="Löschen">${icon("trash")}</button></td></tr>`;
+      }).join("")}</tbody>
     </table></div>`;
     resultsRoot.innerHTML = `<button class="viewer-list-back" id="viewer-list-back">${icon("arrow-left")} Übersicht</button>
       <div class="viewer-list-heading"><div class="viewer-list-title"><p class="eyebrow">${genderName(selected.gender)}</p><h2>${escapeHtml(item.name)}</h2></div>

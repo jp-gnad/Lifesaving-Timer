@@ -1,11 +1,17 @@
 const DISCIPLINES = Object.freeze({
-  normal: 20,
-  rescue50: 2,
-  rescue100: 2,
-  lifesaver100: 3,
-  medley100: 3,
-  superLifesaver200: 7,
-  obstacle200: 4,
+  normal: { laps: 20, flexible: true },
+  rescue50: { laps: 2 },
+  rescue100: { laps: 2 },
+  lifesaver100: { laps: 3 },
+  medley100: { laps: 3 },
+  superLifesaver200: { laps: 7 },
+  obstacle200: { laps: 4 },
+  manikinRelay4x25: { laps: 4, team: true },
+  rescueTubeRelay4x50: { laps: 4, team: true },
+  rescueRelay4x50: { laps: 4, team: true },
+  obstacleRelay4x50: { laps: 4, team: true },
+  mixedRelay4x50: { laps: 4, team: true },
+  lineThrow: { laps: 2, team: true },
 });
 
 const jsonHeaders = {
@@ -80,9 +86,16 @@ async function handleApi(request, env) {
     const event = await env.DB.prepare("SELECT * FROM events WHERE id = ?").bind(eventId).first();
     if (!event) return fail("Event nicht gefunden.", 404);
     const { results: participants } = await env.DB.prepare(`
-      SELECT p.*, COUNT(r.id) AS result_count
-      FROM participants p LEFT JOIN results r ON r.participant_id = p.id
-      WHERE p.event_id = ? GROUP BY p.id ORDER BY p.name COLLATE NOCASE
+      SELECT p.*, (
+        SELECT COUNT(*) FROM results r
+        WHERE r.event_id = p.event_id AND (
+          r.participant_id = p.id OR EXISTS (
+            SELECT 1 FROM result_members rm WHERE rm.result_id = r.id AND rm.participant_id = p.id
+          )
+        )
+      ) AS result_count
+      FROM participants p
+      WHERE p.event_id = ? ORDER BY p.name COLLATE NOCASE
     `).bind(eventId).all();
     return json({ event, participants });
   }
@@ -129,8 +142,12 @@ async function handleApi(request, env) {
   }
 
   if (parts[3] === "participants" && parts[4] && parts.length === 5 && method === "DELETE") {
-    const result = await env.DB.prepare("DELETE FROM participants WHERE id = ? AND event_id = ?")
-      .bind(parts[4], eventId).run();
+    const [, result] = await env.DB.batch([
+      env.DB.prepare(`DELETE FROM results WHERE event_id = ? AND id IN (
+        SELECT result_id FROM result_members WHERE participant_id = ?
+      )`).bind(eventId, parts[4]),
+      env.DB.prepare("DELETE FROM participants WHERE id = ? AND event_id = ?").bind(parts[4], eventId),
+    ]);
     if (!result.meta.changes) return fail("Person nicht gefunden.", 404);
     return json({ ok: true });
   }
@@ -156,31 +173,55 @@ async function handleApi(request, env) {
       WHERE ${conditions.join(" AND ")}
       ORDER BY r.total_centiseconds ASC, r.created_at ASC
     `).bind(...bindings).all();
-    return json({ results: results.map((row) => ({ ...row, segments: JSON.parse(row.segments_json) })) });
+    const { results: memberRows } = await env.DB.prepare(`
+      SELECT rm.result_id, rm.position, p.id, p.name, p.birth_year, p.age_group, p.gender, p.organization
+      FROM result_members rm
+      JOIN results r ON r.id = rm.result_id
+      JOIN participants p ON p.id = rm.participant_id
+      WHERE r.event_id = ?
+      ORDER BY rm.result_id, rm.position
+    `).bind(eventId).all();
+    const membersByResult = new Map();
+    memberRows.forEach((member) => {
+      if (!membersByResult.has(member.result_id)) membersByResult.set(member.result_id, []);
+      membersByResult.get(member.result_id).push(member);
+    });
+    return json({ results: results.map((row) => ({ ...row, segments: JSON.parse(row.segments_json), team_members: membersByResult.get(row.id) || [] })) });
   }
 
   if (parts[3] === "results" && parts.length === 4 && method === "POST") {
     const body = await bodyOf(request);
     if (!(body.discipline in DISCIPLINES)) throw new Error("Ungültige Disziplin.");
-    const participant = await env.DB.prepare("SELECT id FROM participants WHERE id = ? AND event_id = ?")
-      .bind(body.participantId, eventId).first();
-    if (!participant) throw new Error("Person gehört nicht zu diesem Event.");
+    const discipline = DISCIPLINES[body.discipline];
+    const participantIds = discipline.team ? body.participantIds : [body.participantId];
+    if (!Array.isArray(participantIds) || participantIds.some((id) => typeof id !== "string" || !id)) throw new Error("Personenzuordnung fehlt.");
+    if (discipline.team && (participantIds.length !== 4 || new Set(participantIds).size !== 4)) throw new Error("Eine Mannschaft benötigt vier unterschiedliche Personen.");
+    const placeholders = participantIds.map(() => "?").join(",");
+    const { results: assignedParticipants } = await env.DB.prepare(`SELECT id FROM participants WHERE event_id = ? AND id IN (${placeholders})`)
+      .bind(eventId, ...participantIds).all();
+    if (assignedParticipants.length !== participantIds.length) throw new Error("Mindestens eine Person gehört nicht zu diesem Event.");
     if (!Array.isArray(body.segments) || !body.segments.length) throw new Error("Keine Zeiten vorhanden.");
     const segments = body.segments.map(Number);
     if (segments.some((value) => !Number.isInteger(value) || value <= 0)) throw new Error("Ungültige Abschnittszeit.");
-    const maxSegments = DISCIPLINES[body.discipline];
-    if (body.discipline === "normal" ? segments.length > maxSegments : segments.length !== maxSegments) {
-      throw new Error(`Für diese Disziplin werden ${maxSegments} Abschnitte erwartet.`);
+    if (discipline.flexible ? segments.length > discipline.laps : segments.length !== discipline.laps) {
+      throw new Error(`Für diese Disziplin werden ${discipline.laps} Abschnitte erwartet.`);
     }
     const segmentTotal = segments.reduce((sum, value) => sum + value, 0);
     const officialTime = body.officialTime === undefined ? segmentTotal : Number(body.officialTime);
     if (!Number.isInteger(officialTime) || officialTime <= 0) throw new Error("Ungültige offizielle Zeit.");
     if (officialTime > 86_400_000) throw new Error("Zeit ist zu lang.");
     const id = crypto.randomUUID();
-    await env.DB.prepare(`
+    const resultInsert = env.DB.prepare(`
       INSERT INTO results (id, event_id, participant_id, discipline, total_centiseconds, segments_json)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(id, eventId, body.participantId, body.discipline, officialTime, JSON.stringify(segments)).run();
+    `).bind(id, eventId, participantIds[0], body.discipline, officialTime, JSON.stringify(segments));
+    if (discipline.team) {
+      await env.DB.batch([resultInsert, ...participantIds.map((participantId, index) => env.DB.prepare(`
+        INSERT INTO result_members (result_id, participant_id, position) VALUES (?, ?, ?)
+      `).bind(id, participantId, index + 1))]);
+    } else {
+      await resultInsert.run();
+    }
     return json({ id, totalCentiseconds: officialTime }, 201);
   }
 

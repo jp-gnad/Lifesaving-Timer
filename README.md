@@ -9,8 +9,10 @@ Eine bewusst einfache, helle Web-App zur Zeitnahme im Rettungssport. Events, Per
 - Einzelzeitnahme auf mehreren Geräten gleichzeitig
 - Zwei große Timer-Tasten: links Runde/Löschen, rechts Start/Stopp/Weiter
 - Kompaktes Auswahlmenü für den Stoppmodus und korrigierbare Abschnittszeiten
+- Gruppierte Stoppmodi für Normal, Einzel und Mannschaft
 - Feste Lap-Anzahl je Disziplin; Normalmodus mit bis zu 20 Laps
-- Zuordnung der Person erst nach dem Stoppen
+- Zuordnung einer Person oder von vier Mannschaftspositionen erst nach dem Stoppen
+- Separate offizielle Zeit unabhängig von den Abschnittszeiten
 - Live-Rangliste nach Disziplin und Geschlecht, automatisch jede Minute oder manuell frühestens alle 10 Sekunden aktualisiert
 - Speicherung im Format `mm:ss,00` (intern auf Hundertstelsekunden genau)
 
