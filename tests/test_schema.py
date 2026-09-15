@@ -29,12 +29,12 @@ class SchemaTest(unittest.TestCase):
             """INSERT INTO results
                (id, event_id, participant_id, discipline, total_centiseconds, segments_json)
                VALUES (?, ?, ?, ?, ?, ?)""",
-            ("result-1", "event-1", "person-1", "rescue50", 6354, "[3100,3254]"),
+            ("result-1", "event-1", "person-1", "rescue50", 6400, "[3100,3254]"),
         )
         saved = self.db.execute(
             "SELECT total_centiseconds, segments_json FROM results WHERE id = ?", ("result-1",)
         ).fetchone()
-        self.assertEqual(saved, (6354, "[3100,3254]"))
+        self.assertEqual(saved, (6400, "[3100,3254]"))
 
     def test_deleting_event_cascades(self):
         self.db.execute("INSERT INTO events (id, name) VALUES (?, ?)", ("event-1", "Testevent"))

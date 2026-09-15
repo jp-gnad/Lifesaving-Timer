@@ -172,14 +172,16 @@ async function handleApi(request, env) {
     if (body.discipline === "normal" ? segments.length > maxSegments : segments.length !== maxSegments) {
       throw new Error(`Für diese Disziplin werden ${maxSegments} Abschnitte erwartet.`);
     }
-    const total = segments.reduce((sum, value) => sum + value, 0);
-    if (total > 86_400_000) throw new Error("Zeit ist zu lang.");
+    const segmentTotal = segments.reduce((sum, value) => sum + value, 0);
+    const officialTime = body.officialTime === undefined ? segmentTotal : Number(body.officialTime);
+    if (!Number.isInteger(officialTime) || officialTime <= 0) throw new Error("Ungültige offizielle Zeit.");
+    if (officialTime > 86_400_000) throw new Error("Zeit ist zu lang.");
     const id = crypto.randomUUID();
     await env.DB.prepare(`
       INSERT INTO results (id, event_id, participant_id, discipline, total_centiseconds, segments_json)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(id, eventId, body.participantId, body.discipline, total, JSON.stringify(segments)).run();
-    return json({ id, totalCentiseconds: total }, 201);
+    `).bind(id, eventId, body.participantId, body.discipline, officialTime, JSON.stringify(segments)).run();
+    return json({ id, totalCentiseconds: officialTime }, 201);
   }
 
   if (parts[3] === "results" && parts[4] && parts.length === 5 && method === "DELETE") {

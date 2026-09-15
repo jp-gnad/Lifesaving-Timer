@@ -204,8 +204,19 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 .edit-times { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 20px; }
 .total-summary { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-top: 1px solid var(--line); font-size: 18px; }
 .total-summary strong { font-size: 24px; font-variant-numeric: tabular-nums; }
+.official-time-field { margin: 16px 0; }
 
-.filters { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 18px; }
+.result-selection { display: grid; gap: 7px; }
+.result-selection-head, .result-selection-row { display: grid; grid-template-columns: minmax(108px, 1.25fr) repeat(2, minmax(0, 1fr)); gap: 7px; align-items: stretch; }
+.result-selection-head { align-items: end; color: var(--muted); font-size: 12px; text-align: center; }
+.result-selection-discipline { display: flex; align-items: center; min-width: 0; padding-right: 4px; font-size: 14px; line-height: 1.25; }
+.result-choice { min-height: 56px; border: 1px solid #b9cff1; border-radius: 9px; padding: 6px 3px; background: #eef5ff; color: var(--primary-dark); cursor: pointer; display: grid; place-content: center; text-align: center; line-height: 1.1; }
+.result-choice strong { font-size: 18px; }
+.result-choice span { margin-top: 3px; font-size: 11px; }
+.result-choice-empty { display: grid; place-items: center; min-height: 56px; color: #b1bac8; }
+.viewer-list-back { min-height: 42px; margin: 0 0 16px; border: 0; padding: 0; background: transparent; color: var(--primary-dark); cursor: pointer; display: inline-flex; align-items: center; gap: 7px; font-weight: 700; }
+.viewer-list-title { margin-bottom: 16px; }
+.viewer-list-title h2 { margin: 0; }
 .live-note { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
 .viewer-refresh { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
@@ -267,4 +278,7 @@ body.timer-page.timer-locked { position: fixed; inset: 0; width: 100%; height: 1
   .action-card > .button { grid-column: 1 / -1; grid-row: 3; width: 100%; margin-top: 12px; }
   .result-segments { grid-template-columns: 1fr; }
   .form-actions { grid-template-columns: 1fr; }
+  .result-selection-head, .result-selection-row { grid-template-columns: minmax(104px, 1.15fr) repeat(2, minmax(0, 1fr)); gap: 5px; }
+  .result-choice { min-height: 52px; }
+  .result-choice-empty { min-height: 52px; }
 }

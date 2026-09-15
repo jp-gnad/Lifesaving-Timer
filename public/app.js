@@ -261,6 +261,7 @@ async function renderTimer(id) {
     startedAt: 0,
     displayed: 0,
     segments: [],
+    officialTime: null,
     discipline: "normal",
   };
 
@@ -361,7 +362,7 @@ async function renderTimer(id) {
 
   function resetTimer() {
     cancelAnimationFrame(animationFrame);
-    Object.assign(timer, { status: "idle", startedAt: 0, displayed: 0, segments: [] });
+    Object.assign(timer, { status: "idle", startedAt: 0, displayed: 0, segments: [], officialTime: null });
     elements.clock.textContent = "00:00,00";
     elements["clock-status"].textContent = "Bereit";
     elements["mode-button"].disabled = false;
@@ -391,7 +392,8 @@ async function renderTimer(id) {
     review.innerHTML = `<div class="review-topbar"><button class="button secondary icon-button" id="close-review" aria-label="Zurück zum Timer">${icon("arrow-left")}</button><h1>Ergebnis prüfen</h1></div>
       <div class="review-content">
       <div class="edit-times">${timer.segments.map((value, index) => `<div class="field"><label for="segment-${index}">Runde ${index + 1}</label><input class="segment-input" id="segment-${index}" inputmode="decimal" value="${formatTime(value)}" aria-describedby="save-error"></div>`).join("")}</div>
-      <div class="total-summary"><span>Gesamtzeit</span><strong id="save-total">${formatTime(capturedTotal())}</strong></div>
+      <div class="total-summary"><span>Summe der Abschnitte</span><strong id="save-total">${formatTime(capturedTotal())}</strong></div>
+      <div class="field official-time-field"><label for="official-time">Offizielle Zeit</label><input id="official-time" inputmode="decimal" value="${formatTime(timer.officialTime ?? capturedTotal())}" aria-describedby="save-error"></div>
       <div class="field"><label for="participant">Person</label><select id="participant"><option value="">Auswählen …</option>${participants.map((person) =>
         `<option value="${person.id}">${escapeHtml(person.name)} · ${escapeHtml(person.age_group)} · ${escapeHtml(person.organization)}</option>`).join("")}</select>
         <button class="button secondary" id="new-review-person" type="button">${icon("user-plus")} Neue Person</button></div>
@@ -411,18 +413,24 @@ async function renderTimer(id) {
       </form></dialog>`;
 
     const inputs = [...review.querySelectorAll(".segment-input")];
+    const officialInput = review.querySelector("#official-time");
     const participantSelect = review.querySelector("#participant");
     const saveResult = review.querySelector("#save-result");
     const personDialog = review.querySelector("#review-person-dialog");
     const personForm = review.querySelector("#review-person-form");
     function readCorrections(showError = false) {
-      const values = inputs.map((input) => parseTime(input.value));
-      const invalid = values.some((value) => value === null || value <= 0);
-      review.querySelector("#save-error").textContent = showError && invalid ? "Bitte alle Zeiten als mm:ss,00 eingeben." : "";
-      review.querySelector("#save-total").textContent = invalid ? "–" : formatTime(values.reduce((sum, value) => sum + value, 0));
-      return invalid ? null : values;
+      const segments = inputs.map((input) => parseTime(input.value));
+      const officialTime = parseTime(officialInput.value);
+      const invalidSegments = segments.some((value) => value === null || value <= 0);
+      const invalidOfficialTime = officialTime === null || officialTime <= 0;
+      review.querySelector("#save-total").textContent = invalidSegments ? "–" : formatTime(segments.reduce((sum, value) => sum + value, 0));
+      review.querySelector("#save-error").textContent = showError && (invalidSegments || invalidOfficialTime)
+        ? `Bitte ${invalidSegments ? "alle Abschnittszeiten" : "die offizielle Zeit"} als mm:ss,00 eingeben.`
+        : "";
+      return invalidSegments || invalidOfficialTime ? null : { segments, officialTime };
     }
     inputs.forEach((input) => input.addEventListener("input", () => readCorrections(false)));
+    officialInput.addEventListener("input", () => readCorrections(false));
     bindDialogClose(personDialog);
     review.querySelector("#new-review-person").addEventListener("click", () => {
       personForm.reset();
@@ -456,8 +464,9 @@ async function renderTimer(id) {
     review.querySelector("#close-review").addEventListener("click", () => {
       const corrections = readCorrections(false);
       if (corrections) {
-        timer.segments = corrections;
-        timer.displayed = corrections.reduce((sum, value) => sum + value, 0);
+        timer.segments = corrections.segments;
+        timer.displayed = corrections.segments.reduce((sum, value) => sum + value, 0);
+        timer.officialTime = corrections.officialTime;
         elements.clock.textContent = formatTime(timer.displayed);
       }
       review.hidden = true;
@@ -467,15 +476,15 @@ async function renderTimer(id) {
       renderLaps(); updateProgress();
     });
     saveResult.addEventListener("click", async (event) => {
-      const segments = readCorrections(true);
+      const corrections = readCorrections(true);
       const participantId = participantSelect.value;
-      if (!segments || !participantId) {
+      if (!corrections || !participantId) {
         if (!participantId) review.querySelector("#save-error").textContent = "Bitte eine Person auswählen.";
         return;
       }
       try {
         event.currentTarget.disabled = true;
-        await api(`/events/${id}/results`, { method: "POST", body: JSON.stringify({ participantId, discipline: timer.discipline, segments }) });
+        await api(`/events/${id}/results`, { method: "POST", body: JSON.stringify({ participantId, discipline: timer.discipline, segments: corrections.segments, officialTime: corrections.officialTime }) });
         showToast("Ergebnis wurde gespeichert. Bereit für die nächste Person.");
         resetTimer();
       } catch (err) {
@@ -519,6 +528,7 @@ async function renderTimer(id) {
       const finalSegment = finalTime - capturedTotal();
       if (finalSegment <= 0) return;
       timer.displayed = finalTime;
+      timer.officialTime = finalTime;
       timer.status = "stopped";
       timer.segments.push(finalSegment);
       cancelAnimationFrame(animationFrame);
@@ -529,6 +539,7 @@ async function renderTimer(id) {
       return;
     }
     timer.segments.pop();
+    timer.officialTime = null;
     timer.status = "running";
     timer.startedAt = performance.now();
     elements["clock-status"].textContent = "Läuft";
@@ -548,15 +559,69 @@ async function renderViewer(id) {
     <div class="page-head"><div><p class="eyebrow">Live</p><h1>Ergebnisse</h1></div>
       <div class="viewer-refresh"><div class="live-note"><span class="live-dot"></span><span id="live-status">Live · jede Minute</span></div>
       <button class="button secondary small" id="refresh-results">${icon("refresh")} Aktualisieren</button></div></div>
-    <div class="filters"><div class="field"><label for="viewer-discipline">Disziplin</label><select id="viewer-discipline">${disciplineOptions()}</select></div>
-      <div class="field"><label for="viewer-gender">Geschlecht</label><select id="viewer-gender"><option value="female">Weiblich</option><option value="male">Männlich</option></select></div></div>
     <div id="results"><div class="loading">Ergebnisse werden geladen …</div></div>`;
 
-  const discipline = document.querySelector("#viewer-discipline");
-  const gender = document.querySelector("#viewer-gender");
   const resultsRoot = document.querySelector("#results");
   const refreshButton = document.querySelector("#refresh-results");
   let loading = false;
+  let allResults = [];
+  let selected = null;
+
+  const genderName = (gender) => gender === "female" ? "Weiblich" : "Männlich";
+
+  function renderSelection() {
+    const counts = new Map();
+    allResults.forEach((result) => {
+      const key = `${result.discipline}:${result.gender}`;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    resultsRoot.innerHTML = `<div class="result-selection" aria-label="Ergebnisgruppen">
+      <div class="result-selection-head"><span></span><strong>Weiblich</strong><strong>Männlich</strong></div>
+      ${Object.entries(disciplines).map(([disciplineId, item]) => `<div class="result-selection-row">
+        <strong class="result-selection-discipline">${escapeHtml(item.name)}</strong>
+        ${["female", "male"].map((gender) => {
+          const count = counts.get(`${disciplineId}:${gender}`) || 0;
+          return count
+            ? `<button class="result-choice" data-discipline="${disciplineId}" data-gender="${gender}" aria-label="${escapeHtml(item.name)}, ${genderName(gender)}, ${count} ${count === 1 ? "Ergebnis" : "Ergebnisse"}"><strong>${count}</strong><span>${count === 1 ? "Ergebnis" : "Ergebnisse"}</span></button>`
+            : `<span class="result-choice-empty" aria-label="Keine Ergebnisse">–</span>`;
+        }).join("")}
+      </div>`).join("")}
+    </div>`;
+    resultsRoot.querySelectorAll(".result-choice").forEach((button) => button.addEventListener("click", () => {
+      selected = { discipline: button.dataset.discipline, gender: button.dataset.gender };
+      renderContent();
+      window.scrollTo(0, 0);
+    }));
+  }
+
+  function renderResultList() {
+    const item = disciplines[selected.discipline];
+    const results = allResults.filter((result) => result.discipline === selected.discipline && result.gender === selected.gender);
+    resultsRoot.innerHTML = `<button class="viewer-list-back" id="viewer-list-back">${icon("arrow-left")} Übersicht</button>
+      <div class="viewer-list-title"><p class="eyebrow">${genderName(selected.gender)}</p><h2>${escapeHtml(item.name)}</h2></div>
+      ${results.length ? `<div class="result-list">
+        ${results.map((result, index) => `<article class="result-card">
+          <div class="result-head"><span class="rank-badge">${index + 1}</span><div><strong>${escapeHtml(result.participant_name)}</strong><div class="result-meta">Jg. ${result.birth_year} · ${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}</div></div>
+          <button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis von ${escapeHtml(result.participant_name)} löschen" title="Löschen">${icon("trash")}</button></div>
+          <div class="result-time">${formatTime(result.total_centiseconds)}</div>
+          <div class="result-segments">${result.segments.map((value, lap) => `<span>Lap ${lap + 1}<strong>${formatTime(value)}</strong></span>`).join("")}</div>
+        </article>`).join("")}</div>` : `<div class="empty">Noch keine Ergebnisse.</div>`}`;
+    resultsRoot.querySelector("#viewer-list-back").addEventListener("click", () => {
+      selected = null;
+      renderContent();
+      window.scrollTo(0, 0);
+    });
+    resultsRoot.querySelectorAll(".delete-result").forEach((button) => button.addEventListener("click", async () => {
+      if (!confirm("Dieses Ergebnis unwiderruflich löschen?")) return;
+      try { await api(`/events/${id}/results/${button.dataset.id}`, { method: "DELETE" }); showToast("Ergebnis wurde gelöscht."); await loadResults(); }
+      catch (err) { showToast(err.message); }
+    }));
+  }
+
+  function renderContent() {
+    if (selected) renderResultList();
+    else renderSelection();
+  }
 
   function startManualCooldown() {
     const readyAt = Date.now() + 10_000;
@@ -581,28 +646,15 @@ async function renderViewer(id) {
     if (loading) return;
     loading = true;
     try {
-      const data = await api(`/events/${id}/results?discipline=${encodeURIComponent(discipline.value)}&gender=${encodeURIComponent(gender.value)}`);
-      resultsRoot.innerHTML = data.results.length ? `<div class="result-list">
-        ${data.results.map((result, index) => `<article class="result-card">
-          <div class="result-head"><span class="rank-badge">${index + 1}</span><div><strong>${escapeHtml(result.participant_name)}</strong><div class="result-meta">Jg. ${result.birth_year} · ${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}</div></div>
-          <button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis von ${escapeHtml(result.participant_name)} löschen" title="Löschen">${icon("trash")}</button></div>
-          <div class="result-time">${formatTime(result.total_centiseconds)}</div>
-          <div class="result-segments">${result.segments.map((value, lap) => `<span>Lap ${lap + 1}<strong>${formatTime(value)}</strong></span>`).join("")}</div>
-        </article>`).join("")}</div>` :
-        `<div class="empty">Für diese Disziplin und dieses Geschlecht gibt es noch keine Ergebnisse.</div>`;
+      const data = await api(`/events/${id}/results`);
+      allResults = data.results;
+      renderContent();
       document.querySelector("#live-status").textContent = `Live · aktualisiert ${new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date())}`;
-      resultsRoot.querySelectorAll(".delete-result").forEach((button) => button.addEventListener("click", async () => {
-        if (!confirm("Dieses Ergebnis unwiderruflich löschen?")) return;
-        try { await api(`/events/${id}/results/${button.dataset.id}`, { method: "DELETE" }); showToast("Ergebnis wurde gelöscht."); await loadResults(); }
-        catch (err) { showToast(err.message); }
-      }));
     } catch (err) {
       if (!silent) resultsRoot.innerHTML = `<div class="empty">${escapeHtml(err.message)}</div>`;
       document.querySelector("#live-status").textContent = "Verbindung unterbrochen";
     } finally { loading = false; }
   }
-  discipline.addEventListener("change", () => loadResults());
-  gender.addEventListener("change", () => loadResults());
   refreshButton.addEventListener("click", () => {
     startManualCooldown();
     loadResults();
