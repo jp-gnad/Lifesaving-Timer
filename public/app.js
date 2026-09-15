@@ -164,14 +164,14 @@ async function renderHome() {
     <section class="section" aria-labelledby="events-heading">
       <div class="section-head"><h2 id="events-heading">Alle Events</h2><span class="muted">${events.length} ${events.length === 1 ? "Event" : "Events"}</span></div>
       ${events.length ? `<div class="stack">${events.map((event) => `
-        <article class="card event-row">
+        <a class="card event-row" href="#/event/${event.id}" aria-label="${escapeHtml(event.name)} öffnen">
           <div><h3>${escapeHtml(event.name)}</h3><div class="event-meta">
             <span class="meta-item">${icon("calendar")} ${escapeHtml(dateText(event.event_date))}</span>
             ${event.location ? `<span class="meta-item">${icon("location")} ${escapeHtml(event.location)}</span>` : ""}
             <span class="meta-item">${icon("users")} ${event.participant_count}</span><span class="meta-item">${icon("flag")} ${event.result_count}</span>
           </div></div>
-          <a class="button secondary" href="#/event/${event.id}">Öffnen ${icon("arrow-right")}</a>
-        </article>`).join("")}</div>` : `<div class="empty">Noch kein Event vorhanden. Lege das erste Event an.</div>`}
+          <span class="event-row-arrow">${icon("arrow-right")}</span>
+        </a>`).join("")}</div>` : `<div class="empty">Noch kein Event vorhanden. Lege das erste Event an.</div>`}
     </section>
     <dialog id="event-dialog"><form class="dialog-body" id="event-form">
       <h2>Neues Event</h2>
@@ -210,9 +210,8 @@ async function renderEvent(id) {
   setDocumentTitle(event.name);
   app.innerHTML = `
     <a class="back" href="#/">${icon("arrow-left")} Events</a>
-    <div class="page-head"><div><p class="eyebrow">${escapeHtml(dateText(event.event_date))}</p><h1>${escapeHtml(event.name)}</h1>
+    <div class="page-head"><div><p class="eyebrow">${escapeHtml(dateText(event.event_date))}</p><div class="event-title-row"><h1>${escapeHtml(event.name)}</h1><button class="button secondary icon-button" id="edit-event" type="button" aria-label="Event bearbeiten" title="Event bearbeiten">${icon("pencil")}</button></div>
       <p class="lead">${event.location ? escapeHtml(event.location) : "Kein Ort angegeben"} · ${participants.length} Personen</p></div>
-      <button class="button danger small" id="delete-event">${icon("trash")} Löschen</button>
     </div>
     <div class="event-action-grid">
       <a class="card event-action-tile" href="#/timer/${id}"><span class="event-action-icon">${icon("timer")}</span><strong>Timer</strong></a>
@@ -221,11 +220,22 @@ async function renderEvent(id) {
     <section class="section" aria-labelledby="people-heading">
       <div class="section-head"><h2 id="people-heading">Personen</h2><button class="button secondary" id="new-person">${icon("user-plus")} Hinzufügen</button></div>
       ${participants.length ? `<div class="person-list">
-        ${participants.map((person) => `<article class="person-card">
-          <div class="person-head"><strong>${escapeHtml(person.name)} (${String(person.birth_year).slice(-2)})</strong><div class="person-actions"><button class="button secondary small icon-button edit-person" data-id="${person.id}" aria-label="${escapeHtml(person.name)} bearbeiten" title="Bearbeiten">${icon("pencil")}</button><button class="button danger small icon-button delete-person" data-id="${person.id}" data-name="${escapeHtml(person.name)}" data-results="${person.result_count}" aria-label="${escapeHtml(person.name)} löschen" title="Löschen">${icon("trash")}</button></div></div>
+        ${participants.map((person) => `<button class="person-card person-card-button edit-person" type="button" data-id="${person.id}" aria-label="${escapeHtml(person.name)} bearbeiten">
+          <div class="person-head"><strong>${escapeHtml(person.name)} (${String(person.birth_year).slice(-2)})</strong></div>
           <div class="person-details"><span>${escapeHtml(person.organization)} - ${escapeHtml(person.age_group)} - ${person.gender === "male" ? "m" : "w"}</span></div>
-        </article>`).join("")}</div>` : `<div class="empty">Noch keine Personen.</div>`}
+        </button>`).join("")}</div>` : `<div class="empty">Noch keine Personen.</div>`}
     </section>
+    <dialog id="event-edit-dialog"><form class="dialog-body" id="event-edit-form">
+      <h2>Event bearbeiten</h2>
+      <div class="form-grid">
+        <div class="field full"><label for="edit-event-name">Eventname</label><input id="edit-event-name" name="name" maxlength="120" required value="${escapeHtml(event.name)}"></div>
+        <div class="field"><label for="edit-event-date">Datum</label><input id="edit-event-date" name="eventDate" type="date" value="${escapeHtml(event.event_date || "")}"></div>
+        <div class="field"><label for="edit-event-location">Ort</label><input id="edit-event-location" name="location" maxlength="120" value="${escapeHtml(event.location || "")}"></div>
+      </div>
+      <p class="form-error" id="event-edit-error" role="alert"></p>
+      <div class="form-actions"><button type="button" class="button secondary" data-close>Abbrechen</button><button class="button">Event speichern</button></div>
+      <div class="dialog-delete-row"><button type="button" class="button danger small" id="delete-event-dialog">${icon("trash")} Event löschen</button></div>
+    </form></dialog>
     <dialog id="person-dialog"><form class="dialog-body" id="person-form">
       <h2 id="person-dialog-title">Person hinzufügen</h2><div class="form-grid">
         <div class="field full"><label for="person-name">Name</label><input id="person-name" name="name" maxlength="120" autocomplete="name" required></div>
@@ -235,16 +245,42 @@ async function renderEvent(id) {
         <div class="field"><label for="organization">Gliederung</label><input id="organization" name="organization" maxlength="120" required placeholder="Verein / Ortsgruppe"></div>
       </div><p class="form-error" id="person-error" role="alert"></p>
       <div class="form-actions"><button type="button" class="button secondary" data-close>Abbrechen</button><button class="button">Person speichern</button></div>
+      <div class="dialog-delete-row"><button type="button" class="button danger small" id="delete-person-dialog" hidden>${icon("trash")} Person löschen</button></div>
     </form></dialog>`;
+
+  const eventDialog = document.querySelector("#event-edit-dialog");
+  const eventForm = document.querySelector("#event-edit-form");
+  bindDialogClose(eventDialog);
+  document.querySelector("#edit-event").addEventListener("click", () => {
+    document.querySelector("#event-edit-error").textContent = "";
+    openDialog("#event-edit-dialog");
+  });
+  eventForm.addEventListener("submit", async (submitEvent) => {
+    submitEvent.preventDefault();
+    const submitButton = submitEvent.submitter;
+    try {
+      submitButton.disabled = true;
+      document.querySelector("#event-edit-error").textContent = "";
+      const values = Object.fromEntries(new FormData(eventForm));
+      await api(`/events/${id}`, { method: "PATCH", body: JSON.stringify(values) });
+      showToast("Event wurde aktualisiert.");
+      await renderEvent(id);
+    } catch (err) {
+      document.querySelector("#event-edit-error").textContent = err.message;
+      submitButton.disabled = false;
+    }
+  });
 
   const dialog = document.querySelector("#person-dialog");
   const personForm = document.querySelector("#person-form");
   const personDialogTitle = document.querySelector("#person-dialog-title");
+  const deletePersonButton = document.querySelector("#delete-person-dialog");
   bindDialogClose(dialog);
   document.querySelector("#new-person").addEventListener("click", () => {
     personForm.reset();
     personForm.dataset.editId = "";
     personDialogTitle.textContent = "Person hinzufügen";
+    deletePersonButton.hidden = true;
     document.querySelector("#person-error").textContent = "";
     openDialog("#person-dialog");
   });
@@ -253,6 +289,7 @@ async function renderEvent(id) {
     if (!person) return;
     personForm.dataset.editId = person.id;
     personDialogTitle.textContent = "Person bearbeiten";
+    deletePersonButton.hidden = false;
     personForm.elements.name.value = person.name;
     personForm.elements.birthYear.value = person.birth_year;
     personForm.elements.ageGroup.value = person.age_group;
@@ -277,24 +314,27 @@ async function renderEvent(id) {
     }
   });
 
-  document.querySelectorAll(".delete-person").forEach((button) => button.addEventListener("click", async () => {
-    const warning = Number(button.dataset.results) > 0 ? " Dabei werden auch alle Ergebnisse dieser Person gelöscht." : "";
-    if (!confirm(`${button.dataset.name} wirklich löschen?${warning}`)) return;
+  deletePersonButton.addEventListener("click", async () => {
+    const person = participants.find((item) => item.id === personForm.dataset.editId);
+    if (!person) return;
+    const warning = Number(person.result_count) > 0 ? " Dabei werden auch alle Ergebnisse dieser Person gelöscht." : "";
+    if (!confirm(`${person.name} wirklich löschen?${warning}`)) return;
     try {
-      button.disabled = true;
-      await api(`/events/${id}/participants/${button.dataset.id}`, { method: "DELETE" });
+      deletePersonButton.disabled = true;
+      await api(`/events/${id}/participants/${person.id}`, { method: "DELETE" });
       showToast("Person wurde gelöscht.");
       await renderEvent(id);
-    } catch (err) { showToast(err.message); button.disabled = false; }
-  }));
+    } catch (err) { showToast(err.message); deletePersonButton.disabled = false; }
+  });
 
-  document.querySelector("#delete-event").addEventListener("click", async () => {
+  document.querySelector("#delete-event-dialog").addEventListener("click", async (deleteEvent) => {
     if (!confirm(`Event „${event.name}“ mit allen Personen und Ergebnissen unwiderruflich löschen?`)) return;
     try {
+      deleteEvent.currentTarget.disabled = true;
       await api(`/events/${id}`, { method: "DELETE" });
       showToast("Event wurde gelöscht.");
       location.hash = "#/";
-    } catch (err) { showToast(err.message); }
+    } catch (err) { showToast(err.message); deleteEvent.currentTarget.disabled = false; }
   });
 }
 

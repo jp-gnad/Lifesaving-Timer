@@ -106,6 +106,18 @@ async function handleApi(request, env) {
     return json({ ok: true });
   }
 
+  if (parts.length === 3 && method === "PATCH") {
+    const body = await bodyOf(request);
+    const name = cleanText(body.name, "Eventname");
+    const location = cleanText(body.location, "Ort", 120, false);
+    const eventDate = body.eventDate ? cleanText(body.eventDate, "Datum", 10) : null;
+    if (eventDate && !/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) throw new Error("Ungültiges Datum.");
+    const result = await env.DB.prepare("UPDATE events SET name = ?, event_date = ?, location = ? WHERE id = ?")
+      .bind(name, eventDate, location, eventId).run();
+    if (!result.meta.changes) return fail("Event nicht gefunden.", 404);
+    return json({ ok: true });
+  }
+
   if (!(await eventExists(env.DB, eventId))) return fail("Event nicht gefunden.", 404);
 
   if (parts[3] === "participants" && parts.length === 4 && method === "POST") {
