@@ -383,23 +383,24 @@ function pdfEscapedText(value) {
   return pdfSafeText(value).replace(/([\\()])/g, "\\$1");
 }
 
-function createResultsPdf(title, headers, rows) {
+function createResultsPdf(title, subtitle, headers, rows) {
   const pageWidth = 841.89;
   const pageHeight = 595.28;
   const margin = 28;
-  const titleHeight = 30;
-  const headerHeight = 22;
-  const rowHeight = 19;
+  const titleHeight = 42;
+  const headerHeight = 24;
+  const rowHeight = 27;
   const rowsPerPage = Math.max(1, Math.floor((pageHeight - (margin * 2) - titleHeight - headerHeight) / rowHeight));
   const pageRows = [];
   for (let index = 0; index < rows.length; index += rowsPerPage) pageRows.push(rows.slice(index, index + rowsPerPage));
   if (!pageRows.length) pageRows.push([]);
 
   const usableWidth = pageWidth - (margin * 2);
-  const fixedTimeWidth = 66;
-  const personWidth = headers.length > 12 ? 155 : 220;
-  const lapWidth = Math.max(22, (usableWidth - personWidth - (fixedTimeWidth * 2)) / Math.max(1, headers.length - 3));
-  const widths = headers.map((_, index) => index === 0 ? personWidth : (index < 3 ? fixedTimeWidth : lapWidth));
+  const ageGroupWidth = 44;
+  const timeWidth = 78;
+  const personWidth = headers.length > 12 ? 150 : 220;
+  const lapWidth = Math.max(22, (usableWidth - personWidth - ageGroupWidth - timeWidth) / Math.max(1, headers.length - 3));
+  const widths = headers.map((_, index) => index === 0 ? personWidth : (index === 1 ? ageGroupWidth : (index === 2 ? timeWidth : lapWidth)));
   const widthScale = usableWidth / widths.reduce((sum, width) => sum + width, 0);
   const scaledWidths = widths.map((width) => width * widthScale);
   const fontSize = headers.length > 14 ? 6 : 7;
@@ -411,16 +412,19 @@ function createResultsPdf(title, headers, rows) {
   };
   const pageContents = pageRows.map((pageData, pageIndex) => {
     const commands = [];
-    commands.push("0 G 0.45 w");
+    const generatedAt = new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(new Date());
+    commands.push("0 g 0 G 0.45 w");
     commands.push(`BT /F2 13 Tf ${margin} ${pageHeight - margin - 12} Td (${pdfEscapedText(title)}) Tj ET`);
-    commands.push(`BT /F1 7 Tf ${pageWidth - margin - 76} ${pageHeight - margin - 11} Td (Seite ${pageIndex + 1}/${pageRows.length}) Tj ET`);
+    commands.push(`0.35 g BT /F1 8 Tf ${margin} ${pageHeight - margin - 26} Td (${pdfEscapedText(subtitle)}) Tj ET`);
+    commands.push(`0.35 g BT /F1 7 Tf ${pageWidth - margin - 122} ${pageHeight - margin - 11} Td (${pdfEscapedText(generatedAt)}) Tj ET`);
+    commands.push(`0.35 g BT /F1 7 Tf ${pageWidth - margin - 70} ${pageHeight - margin - 24} Td (Seite ${pageIndex + 1}/${pageRows.length}) Tj ET`);
     let top = pageHeight - margin - titleHeight;
     let x = margin;
     headers.forEach((header, index) => {
       const width = scaledWidths[index];
       commands.push(`0.93 g ${x.toFixed(2)} ${(top - headerHeight).toFixed(2)} ${width.toFixed(2)} ${headerHeight} re f`);
-      commands.push(`0 G ${x.toFixed(2)} ${(top - headerHeight).toFixed(2)} ${width.toFixed(2)} ${headerHeight} re S`);
-      commands.push(`BT /F2 ${fontSize} Tf ${(x + 3).toFixed(2)} ${(top - 14).toFixed(2)} Td (${pdfEscapedText(truncate(header, width))}) Tj ET`);
+      commands.push(`0 g 0 G ${x.toFixed(2)} ${(top - headerHeight).toFixed(2)} ${width.toFixed(2)} ${headerHeight} re S`);
+      commands.push(`0 g BT /F2 ${fontSize} Tf ${(x + 3).toFixed(2)} ${(top - 15).toFixed(2)} Td (${pdfEscapedText(truncate(header, width))}) Tj ET`);
       x += width;
     });
     top -= headerHeight;
@@ -428,8 +432,16 @@ function createResultsPdf(title, headers, rows) {
       x = margin;
       row.forEach((cell, index) => {
         const width = scaledWidths[index];
-        commands.push(`${x.toFixed(2)} ${(top - rowHeight).toFixed(2)} ${width.toFixed(2)} ${rowHeight} re S`);
-        commands.push(`BT /F1 ${fontSize} Tf ${(x + 3).toFixed(2)} ${(top - 12.5).toFixed(2)} Td (${pdfEscapedText(truncate(cell, width))}) Tj ET`);
+        const value = typeof cell === "object" && cell !== null ? cell : { main: cell };
+        const hasSecondary = Boolean(value.secondary);
+        commands.push(`0 G ${x.toFixed(2)} ${(top - rowHeight).toFixed(2)} ${width.toFixed(2)} ${rowHeight} re S`);
+        commands.push(`0 g BT /${value.bold ? "F2" : "F1"} ${fontSize} Tf ${(x + 3).toFixed(2)} ${(top - (hasSecondary ? 11 : 17)).toFixed(2)} Td (${pdfEscapedText(truncate(value.main, width))}) Tj ET`);
+        if (hasSecondary) {
+          const secondarySize = Math.max(5, fontSize - 1.5);
+          commands.push(value.tone === "frequency" ? "0.58 0.38 0 rg" : "0.48 g");
+          commands.push(`BT /F1 ${secondarySize} Tf ${(x + 3).toFixed(2)} ${(top - 21).toFixed(2)} Td (${pdfEscapedText(truncate(value.secondary, width, secondarySize))}) Tj ET`);
+          commands.push("0 g");
+        }
         x += width;
       });
       top -= rowHeight;
@@ -1876,24 +1888,35 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
       if (result) openResultEditor(result);
     }));
     document.querySelector("#create-results-pdf").addEventListener("click", () => {
-      const headers = ["Person", "Gestoppt", "Offiziell", ...Array.from({ length: lapCount }, (_, lap) => `L${lap + 1}`)];
+      const headers = ["Name", "AK", "Zeit", ...Array.from({ length: lapCount }, (_, lap) => `Lap ${lap + 1}`)];
       const rows = results.map((result) => {
         const teamMembers = result.team_members || [];
         const person = teamMembers.length
           ? teamMembers.map((member) => `${member.position}. ${member.name} (${String(member.birth_year).slice(-2)})`).join(" / ")
-          : `${result.participant_name} (${String(result.birth_year).slice(-2)}) - ${result.age_group} - ${result.organization}`;
+          : `${result.participant_name} (${String(result.birth_year).slice(-2)})`;
+        const ageGroup = teamMembers.length
+          ? [...new Set(teamMembers.map((member) => member.age_group).filter(Boolean))].join("/")
+          : result.age_group;
         const stoppedTime = result.segments.reduce((sum, value) => sum + (Number.isInteger(value) && value > 0 ? value : 0), 0);
         const lapCells = Array.from({ length: lapCount }, () => "–");
         const groups = resultLapGroups(result);
         result.segments.forEach((value, index) => {
           const group = groups[index] || [index + 1];
-          const frequency = Number.isInteger(result.frequencies?.[index]) ? ` ${result.frequencies[index]}/min` : "";
-          lapCells[group[0] - 1] = value == null ? "–" : `${formatReviewTime(value)}${frequency}`;
+          const frequency = Number.isInteger(result.frequencies?.[index]) ? `${result.frequencies[index]}/min` : "";
+          lapCells[group[0] - 1] = value == null
+            ? "–"
+            : { main: formatReviewTime(value), secondary: frequency, tone: "frequency" };
           group.slice(1).forEach((lap) => { lapCells[lap - 1] = ""; });
         });
-        return [person, formatTime(stoppedTime), result.official_centiseconds == null ? "–" : formatTime(result.official_centiseconds), ...lapCells];
+        const timeCell = {
+          main: formatTime(stoppedTime),
+          bold: true,
+          secondary: result.official_centiseconds == null ? "" : `offi. ${formatTime(result.official_centiseconds)}`,
+          tone: "muted",
+        };
+        return [person, ageGroup, timeCell, ...lapCells];
       });
-      openPdf(createResultsPdf(`${event.name} - ${item.name} - ${genderName(selected.gender)}`, headers, rows));
+      openPdf(createResultsPdf(`Wettkampf: ${event.name}`, `${item.name} - ${genderName(selected.gender)}`, headers, rows));
     });
   }
 
