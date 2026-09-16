@@ -370,6 +370,114 @@ function resultLapGroups(result) {
   return result.segments.map((_, index) => [index + 1]);
 }
 
+function pdfSafeText(value) {
+  return String(value ?? "")
+    .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue")
+    .replace(/Ä/g, "Ae").replace(/Ö/g, "Oe").replace(/Ü/g, "Ue")
+    .replace(/ß/g, "ss").replace(/×/g, "x")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\x20-\x7E]/g, "?");
+}
+
+function pdfEscapedText(value) {
+  return pdfSafeText(value).replace(/([\\()])/g, "\\$1");
+}
+
+function createResultsPdf(title, headers, rows) {
+  const pageWidth = 841.89;
+  const pageHeight = 595.28;
+  const margin = 28;
+  const titleHeight = 30;
+  const headerHeight = 22;
+  const rowHeight = 19;
+  const rowsPerPage = Math.max(1, Math.floor((pageHeight - (margin * 2) - titleHeight - headerHeight) / rowHeight));
+  const pageRows = [];
+  for (let index = 0; index < rows.length; index += rowsPerPage) pageRows.push(rows.slice(index, index + rowsPerPage));
+  if (!pageRows.length) pageRows.push([]);
+
+  const usableWidth = pageWidth - (margin * 2);
+  const fixedTimeWidth = 66;
+  const personWidth = headers.length > 12 ? 155 : 220;
+  const lapWidth = Math.max(22, (usableWidth - personWidth - (fixedTimeWidth * 2)) / Math.max(1, headers.length - 3));
+  const widths = headers.map((_, index) => index === 0 ? personWidth : (index < 3 ? fixedTimeWidth : lapWidth));
+  const widthScale = usableWidth / widths.reduce((sum, width) => sum + width, 0);
+  const scaledWidths = widths.map((width) => width * widthScale);
+  const fontSize = headers.length > 14 ? 6 : 7;
+
+  const truncate = (value, width, size = fontSize) => {
+    const text = pdfSafeText(value);
+    const maximum = Math.max(1, Math.floor((width - 6) / (size * .52)));
+    return text.length > maximum ? `${text.slice(0, Math.max(1, maximum - 2))}..` : text;
+  };
+  const pageContents = pageRows.map((pageData, pageIndex) => {
+    const commands = [];
+    commands.push("0 G 0.45 w");
+    commands.push(`BT /F2 13 Tf ${margin} ${pageHeight - margin - 12} Td (${pdfEscapedText(title)}) Tj ET`);
+    commands.push(`BT /F1 7 Tf ${pageWidth - margin - 76} ${pageHeight - margin - 11} Td (Seite ${pageIndex + 1}/${pageRows.length}) Tj ET`);
+    let top = pageHeight - margin - titleHeight;
+    let x = margin;
+    headers.forEach((header, index) => {
+      const width = scaledWidths[index];
+      commands.push(`0.93 g ${x.toFixed(2)} ${(top - headerHeight).toFixed(2)} ${width.toFixed(2)} ${headerHeight} re f`);
+      commands.push(`0 G ${x.toFixed(2)} ${(top - headerHeight).toFixed(2)} ${width.toFixed(2)} ${headerHeight} re S`);
+      commands.push(`BT /F2 ${fontSize} Tf ${(x + 3).toFixed(2)} ${(top - 14).toFixed(2)} Td (${pdfEscapedText(truncate(header, width))}) Tj ET`);
+      x += width;
+    });
+    top -= headerHeight;
+    pageData.forEach((row) => {
+      x = margin;
+      row.forEach((cell, index) => {
+        const width = scaledWidths[index];
+        commands.push(`${x.toFixed(2)} ${(top - rowHeight).toFixed(2)} ${width.toFixed(2)} ${rowHeight} re S`);
+        commands.push(`BT /F1 ${fontSize} Tf ${(x + 3).toFixed(2)} ${(top - 12.5).toFixed(2)} Td (${pdfEscapedText(truncate(cell, width))}) Tj ET`);
+        x += width;
+      });
+      top -= rowHeight;
+    });
+    return commands.join("\n");
+  });
+
+  const fontRegularId = 3 + (pageContents.length * 2);
+  const fontBoldId = fontRegularId + 1;
+  const objects = [];
+  const pageIds = pageContents.map((_, index) => 3 + (index * 2));
+  objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
+  objects[2] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pageIds.length} >>`;
+  pageContents.forEach((content, index) => {
+    const pageId = pageIds[index];
+    const contentId = pageId + 1;
+    objects[pageId] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 ${fontRegularId} 0 R /F2 ${fontBoldId} 0 R >> >> /Contents ${contentId} 0 R >>`;
+    objects[contentId] = `<< /Length ${content.length} >>\nstream\n${content}\nendstream`;
+  });
+  objects[fontRegularId] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
+  objects[fontBoldId] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>";
+
+  let documentText = "%PDF-1.4\n";
+  const offsets = [0];
+  for (let id = 1; id < objects.length; id += 1) {
+    offsets[id] = documentText.length;
+    documentText += `${id} 0 obj\n${objects[id]}\nendobj\n`;
+  }
+  const xrefOffset = documentText.length;
+  documentText += `xref\n0 ${objects.length}\n0000000000 65535 f \n`;
+  for (let id = 1; id < objects.length; id += 1) documentText += `${String(offsets[id]).padStart(10, "0")} 00000 n \n`;
+  documentText += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return new Blob([documentText], { type: "application/pdf" });
+}
+
+function openPdf(blob) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.target = "_blank";
+  link.rel = "noopener";
+  link.hidden = true;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 function disciplineOptions(selected = "normal") {
   return Object.entries(disciplines).map(([id, item]) =>
     `<option value="${id}" ${id === selected ? "selected" : ""}>${item.name} · ${item.flexible ? "max. " : ""}${item.laps} Laps</option>`
@@ -1570,14 +1678,28 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
     <div class="page-head viewer-page-head"><h1>Ergebnisse</h1>
       <div class="viewer-refresh"><div class="live-note"><span class="live-dot"></span><span id="live-status">Live · jede Minute</span></div>
       <button class="button secondary viewer-refresh-button" id="refresh-results">${icon("refresh")} Aktualisieren</button></div></div></div>
-    <div id="results"><div class="loading">Ergebnisse werden geladen …</div></div>`;
+    <div id="results"><div class="loading">Ergebnisse werden geladen …</div></div>
+    <dialog id="result-edit-dialog"><form class="dialog-body result-edit-form" id="result-edit-form">
+      <div class="dialog-title-row"><h2>Ergebnis bearbeiten</h2><button type="button" class="button secondary icon-button" data-close aria-label="Schließen">${icon("x")}</button></div>
+      <div id="result-edit-fields"></div>
+      <p class="form-error" id="result-edit-error" role="alert"></p>
+      <div class="form-actions"><button type="button" class="button secondary" data-close>Abbrechen</button><button class="button">Speichern</button></div>
+      <div class="dialog-delete-row"><button type="button" class="button danger small" id="delete-result-dialog">${icon("trash")} Ergebnis löschen</button></div>
+    </form></dialog>`;
 
   const overviewHead = document.querySelector("#viewer-overview-head");
   const resultsRoot = document.querySelector("#results");
   const refreshButton = document.querySelector("#refresh-results");
+  const resultEditDialog = document.querySelector("#result-edit-dialog");
+  const resultEditForm = document.querySelector("#result-edit-form");
+  const resultEditFields = document.querySelector("#result-edit-fields");
+  const resultEditError = document.querySelector("#result-edit-error");
+  const deleteResultButton = document.querySelector("#delete-result-dialog");
   let loading = false;
   let allResults = [];
-  let resultView = "cards";
+  let editingResult = null;
+
+  bindDialogClose(resultEditDialog);
 
   const genderName = (gender) => gender === "female" ? "Weiblich" : (gender === "male" ? "Männlich" : "Mixed");
 
@@ -1619,6 +1741,98 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
     }));
   }
 
+  function openResultEditor(result) {
+    editingResult = result;
+    resultEditError.textContent = "";
+    resultEditForm.querySelector('button[type="submit"], button:not([type])').disabled = false;
+    deleteResultButton.disabled = false;
+    const lapGroups = resultLapGroups(result);
+    const displayName = result.team_members?.length
+      ? "Mannschaft"
+      : `${result.participant_name} (${String(result.birth_year).slice(-2)})`;
+    const stoppedTime = result.segments.reduce((sum, value) => sum + (Number.isInteger(value) && value > 0 ? value : 0), 0);
+    resultEditFields.innerHTML = `
+      <div class="result-edit-person"><strong>${escapeHtml(displayName)}</strong><span>${escapeHtml(disciplines[result.discipline].name)}</span></div>
+      <div class="review-time-summary result-edit-times-summary">
+        <div class="field"><span class="label">Gestoppt</span><div class="total-summary"><strong id="result-edit-stopped">${formatTime(stoppedTime)}</strong></div></div>
+        <label class="field"><span>Offiziell</span><input id="result-edit-official" inputmode="decimal" placeholder="m:ss,00" value="${result.official_centiseconds == null ? "" : formatTime(result.official_centiseconds)}"></label>
+      </div>
+      <div class="result-edit-laps">${result.segments.map((value, index) => {
+        const group = lapGroups[index] || [index + 1];
+        const frequency = result.frequencies?.[index];
+        return `<div class="result-edit-lap">
+          <strong>${escapeHtml(disciplineLapGroupLabel(result.discipline, group))}</strong>
+          <label><span>Zeit (s)</span><input class="result-edit-segment" inputmode="decimal" value="${value == null ? "" : formatReviewTime(value)}"></label>
+          <label><span>Freq.</span><input class="result-edit-frequency" inputmode="numeric" value="${Number.isInteger(frequency) ? frequency : ""}"></label>
+        </div>`;
+      }).join("")}</div>`;
+    const updateStoppedTime = () => {
+      const values = [...resultEditFields.querySelectorAll(".result-edit-segment")]
+        .map((input) => input.value.trim() ? parseReviewTime(input.value) : null);
+      const validTotal = values.reduce((sum, value) => sum + (Number.isInteger(value) ? value : 0), 0);
+      resultEditFields.querySelector("#result-edit-stopped").textContent = formatTime(validTotal);
+    };
+    resultEditFields.querySelectorAll(".result-edit-segment").forEach((input) => input.addEventListener("input", updateStoppedTime));
+    showDialog(resultEditDialog, { focusField: false });
+  }
+
+  resultEditForm.addEventListener("submit", async (submitEvent) => {
+    submitEvent.preventDefault();
+    if (!editingResult) return;
+    const submitButton = submitEvent.submitter;
+    const segmentInputs = [...resultEditFields.querySelectorAll(".result-edit-segment")];
+    const frequencyInputs = [...resultEditFields.querySelectorAll(".result-edit-frequency")];
+    const segments = segmentInputs.map((input) => input.value.trim() ? parseReviewTime(input.value) : null);
+    const frequencies = frequencyInputs.map((input) => input.value.trim() ? Number(input.value) : null);
+    const officialText = resultEditFields.querySelector("#result-edit-official").value.trim();
+    const officialTime = officialText ? parseTime(officialText) : null;
+    if (segments.some((value, index) => segmentInputs[index].value.trim() && !Number.isInteger(value))) {
+      resultEditError.textContent = "Lap-Zeiten bitte als Sekunden eingeben, zum Beispiel 32,45.";
+      return;
+    }
+    if (!segments.some((value) => Number.isInteger(value) && value > 0)) {
+      resultEditError.textContent = "Mindestens eine Lap-Zeit ist erforderlich.";
+      return;
+    }
+    if (frequencies.some((value) => value !== null && (!Number.isInteger(value) || value < 1 || value > 999))) {
+      resultEditError.textContent = "Frequenzen müssen zwischen 1 und 999 liegen.";
+      return;
+    }
+    if (officialText && officialTime === null) {
+      resultEditError.textContent = "Offizielle Zeit bitte als m:ss,00 eingeben.";
+      return;
+    }
+    try {
+      submitButton.disabled = true;
+      resultEditError.textContent = "";
+      await api(`/events/${id}/results/${editingResult.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ segments, frequencies, lapGroups: resultLapGroups(editingResult), officialTime }),
+      });
+      resultEditDialog.close();
+      editingResult = null;
+      await loadResults();
+    } catch (error) {
+      resultEditError.textContent = error.message;
+      submitButton.disabled = false;
+    }
+  });
+
+  deleteResultButton.addEventListener("click", async () => {
+    if (!editingResult || !confirm("Dieses Ergebnis unwiderruflich löschen?")) return;
+    try {
+      deleteResultButton.disabled = true;
+      await api(`/events/${id}/results/${editingResult.id}`, { method: "DELETE" });
+      resultEditDialog.close();
+      editingResult = null;
+      await loadResults();
+    } catch (error) {
+      resultEditError.textContent = error.message;
+    } finally {
+      deleteResultButton.disabled = false;
+    }
+  });
+
   function renderResultList() {
     const item = disciplines[selected.discipline];
     overviewHead.hidden = true;
@@ -1630,7 +1844,7 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
     }, 0);
     const lapCount = item.flexible ? savedLapCount : item.laps;
     const cardView = `<div class="result-list">
-      ${results.map((result, index) => {
+      ${results.map((result) => {
         const teamMembers = result.team_members || [];
         const lapGroups = resultLapGroups(result);
         const displayName = teamMembers.length ? "Mannschaft" : `${result.participant_name} (${String(result.birth_year).slice(-2)})`;
@@ -1643,54 +1857,44 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
           : `<div class="result-meta">${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}</div>`;
         const stoppedTime = result.segments.reduce((sum, value) => sum + (Number.isInteger(value) && value > 0 ? value : 0), 0);
         return `<article class="result-card">
-        <div class="result-head"><span class="rank-badge">${index + 1}</span><div>${resultIdentity}${details}</div>
-        <button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis ${index + 1} löschen" title="Löschen">${icon("trash")}</button></div>
+        <div class="result-head"><div>${resultIdentity}${details}</div>
+        <button class="button secondary small icon-button edit-result" data-id="${result.id}" aria-label="Ergebnis bearbeiten" title="Bearbeiten">${icon("pencil")}</button></div>
         <div class="result-times"><div><span>Gestoppt</span><strong>${formatTime(stoppedTime)}</strong></div><div class="official"><span>Offiziell</span><strong>${result.official_centiseconds == null ? "–" : formatTime(result.official_centiseconds)}</strong></div></div>
-        <div class="result-segments">${result.segments.map((value, lap) => {
+        <details class="result-laps-details"><summary>Runden <span>${result.segments.length}</span></summary><div class="result-segments">${result.segments.map((value, lap) => {
           const group = lapGroups[lap] || [lap + 1];
           const glued = group.length > 1;
           return `<span class="${glued ? "glued-result-lap" : ""}"><span class="result-lap-label">${escapeHtml(disciplineLapGroupLabel(result.discipline, group))}${Number.isInteger(result.frequencies?.[lap]) ? `<small>${result.frequencies[lap]}/min</small>` : ""}</span><strong>${value === null ? "–" : formatTime(value)}</strong></span>`;
-        }).join("")}</div>
+        }).join("")}</div></details>
       </article>`;
       }).join("")}</div>`;
-    const tableView = `<div class="result-table-wrap"><table class="result-table">
-      <caption class="sr-only">Ergebnisse ${escapeHtml(item.name)}, ${genderName(selected.gender)}</caption>
-      <thead><tr><th>Person</th><th>Gestoppt</th><th>Offiziell</th>${Array.from({ length: lapCount }, (_, lap) => `<th title="${escapeHtml(disciplineLapLabel(selected.discipline, lap + 1))}">L${lap + 1}</th>`).join("")}<th><span class="sr-only">Aktionen</span></th></tr></thead>
-      <tbody>${results.map((result) => {
-        const teamMembers = result.team_members || [];
-        const lapGroups = resultLapGroups(result);
-        const displayName = teamMembers.length ? "Mannschaft" : `${result.participant_name} (${String(result.birth_year).slice(-2)})`;
-        const tableIdentity = teamMembers.length
-          ? `<strong>Mannschaft</strong>`
-          : `<strong>${escapeHtml(displayName)}</strong>`;
-        const details = teamMembers.length
-          ? `<span class="table-team-members">${teamMembers.map((member) => `<span>Pos. ${member.position}: ${escapeHtml(member.name)} (${String(member.birth_year).slice(-2)})</span>`).join("")}</span>`
-          : `${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}`;
-        const stoppedTime = result.segments.reduce((sum, value) => sum + (Number.isInteger(value) && value > 0 ? value : 0), 0);
-        return `<tr><td>${tableIdentity}<small>${details}</small></td>
-        <td class="stopped-result">${formatTime(stoppedTime)}</td>
-        <td class="official-result">${result.official_centiseconds == null ? "–" : formatTime(result.official_centiseconds)}</td>
-        ${result.segments.map((value, lap) => {
-          const group = lapGroups[lap] || [lap + 1];
-          const span = Math.max(1, group.length);
-          return `<td colspan="${span}" class="${span > 1 ? "glued-result-cell" : ""}" aria-label="${escapeHtml(disciplineLapGroupLabel(result.discipline, group))}">${value ? `<span class="table-lap-value">${formatReviewTime(value)}${Number.isInteger(result.frequencies?.[lap]) ? `<small>${result.frequencies[lap]}/min</small>` : ""}</span>` : "–"}</td>`;
-        }).join("")}${Array.from({ length: Math.max(0, lapCount - lapGroups.flat().length) }, () => "<td>–</td>").join("")}
-        <td><button class="table-delete-result delete-result" data-id="${result.id}" aria-label="Ergebnis löschen">Löschen</button></td></tr>`;
-      }).join("")}</tbody>
-    </table></div>`;
     resultsRoot.innerHTML = `<a class="viewer-list-back" id="viewer-list-back" href="#/viewer/${id}" data-history-back>${icon("arrow-left")} Ergebnisse</a>
       <div class="viewer-list-heading"><div class="viewer-list-title"><p class="eyebrow">${genderName(selected.gender)}</p><h2>${escapeHtml(item.name)}</h2></div>
-        <div class="result-view-toggle" role="group" aria-label="Darstellung"><button data-result-view="cards" class="${resultView === "cards" ? "active" : ""}" aria-pressed="${resultView === "cards"}">${icon("cards")} Karten</button><button data-result-view="table" class="${resultView === "table" ? "active" : ""}" aria-pressed="${resultView === "table"}">${icon("table")} Tabelle</button></div></div>
-      ${results.length ? (resultView === "table" ? tableView : cardView) : `<div class="empty">Noch keine Ergebnisse.</div>`}`;
-    resultsRoot.querySelectorAll("[data-result-view]").forEach((button) => button.addEventListener("click", () => {
-      resultView = button.dataset.resultView;
-      renderResultList();
+        <button class="button secondary results-pdf-button" id="create-results-pdf" type="button">PDF</button></div>
+      ${results.length ? cardView : `<div class="empty">Noch keine Ergebnisse.</div>`}`;
+    resultsRoot.querySelectorAll(".edit-result").forEach((button) => button.addEventListener("click", () => {
+      const result = results.find((entry) => entry.id === button.dataset.id);
+      if (result) openResultEditor(result);
     }));
-    resultsRoot.querySelectorAll(".delete-result").forEach((button) => button.addEventListener("click", async () => {
-      if (!confirm("Dieses Ergebnis unwiderruflich löschen?")) return;
-      try { await api(`/events/${id}/results/${button.dataset.id}`, { method: "DELETE" }); showToast("Ergebnis wurde gelöscht."); await loadResults(); }
-      catch (err) { showToast(err.message); }
-    }));
+    document.querySelector("#create-results-pdf").addEventListener("click", () => {
+      const headers = ["Person", "Gestoppt", "Offiziell", ...Array.from({ length: lapCount }, (_, lap) => `L${lap + 1}`)];
+      const rows = results.map((result) => {
+        const teamMembers = result.team_members || [];
+        const person = teamMembers.length
+          ? teamMembers.map((member) => `${member.position}. ${member.name} (${String(member.birth_year).slice(-2)})`).join(" / ")
+          : `${result.participant_name} (${String(result.birth_year).slice(-2)}) - ${result.age_group} - ${result.organization}`;
+        const stoppedTime = result.segments.reduce((sum, value) => sum + (Number.isInteger(value) && value > 0 ? value : 0), 0);
+        const lapCells = Array.from({ length: lapCount }, () => "–");
+        const groups = resultLapGroups(result);
+        result.segments.forEach((value, index) => {
+          const group = groups[index] || [index + 1];
+          const frequency = Number.isInteger(result.frequencies?.[index]) ? ` ${result.frequencies[index]}/min` : "";
+          lapCells[group[0] - 1] = value == null ? "–" : `${formatReviewTime(value)}${frequency}`;
+          group.slice(1).forEach((lap) => { lapCells[lap - 1] = ""; });
+        });
+        return [person, formatTime(stoppedTime), result.official_centiseconds == null ? "–" : formatTime(result.official_centiseconds), ...lapCells];
+      });
+      openPdf(createResultsPdf(`${event.name} - ${item.name} - ${genderName(selected.gender)}`, headers, rows));
+    });
   }
 
   function renderContent() {

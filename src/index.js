@@ -34,6 +34,41 @@ function cleanText(value, field, max = 120, required = true) {
   return text;
 }
 
+function validatedResultTiming(body, discipline) {
+  if (!Array.isArray(body.segments) || !body.segments.length) throw new Error("Keine Zeiten vorhanden.");
+  const segments = body.segments.map((value) => value === null ? null : Number(value));
+  if (segments.some((value) => value !== null && (!Number.isInteger(value) || value <= 0))) throw new Error("Ungültige Abschnittszeit.");
+  if (!segments.some((value) => Number.isInteger(value) && value > 0)) throw new Error("Keine Zeiten vorhanden.");
+  if (segments.length > discipline.laps) throw new Error(`Für diese Disziplin sind höchstens ${discipline.laps} Abschnitte erlaubt.`);
+  const lapGroups = body.lapGroups === undefined
+    ? segments.map((_, index) => [index + 1])
+    : body.lapGroups;
+  if (!Array.isArray(lapGroups) || lapGroups.length !== segments.length) throw new Error("Ungültige Lap-Bereiche.");
+  const coveredLaps = [];
+  lapGroups.forEach((group) => {
+    if (!Array.isArray(group) || !group.length || group.some((lap) => !Number.isInteger(lap) || lap < 1 || lap > discipline.laps)) {
+      throw new Error("Ungültige Lap-Bereiche.");
+    }
+    if (group.some((lap, index) => index > 0 && lap !== group[index - 1] + 1)) throw new Error("Es dürfen nur benachbarte Laps verbunden werden.");
+    coveredLaps.push(...group);
+  });
+  if ((!discipline.flexible && coveredLaps.length !== discipline.laps) || coveredLaps.some((lap, index) => lap !== index + 1) || coveredLaps.length > discipline.laps) {
+    throw new Error(`Für diese Disziplin müssen die Lap-Bereiche 1 bis ${discipline.laps} lückenlos abdecken.`);
+  }
+  const frequencies = body.frequencies === undefined
+    ? segments.map(() => null)
+    : body.frequencies;
+  if (!Array.isArray(frequencies) || frequencies.length !== segments.length) throw new Error("Ungültige Frequenzwerte.");
+  if (frequencies.some((value) => value !== null && (!Number.isInteger(value) || value < 1 || value > 999))) {
+    throw new Error("Frequenzen müssen ganze Zahlen von 1 bis 999 sein.");
+  }
+  const segmentTotal = segments.reduce((sum, value) => sum + (value || 0), 0);
+  const officialTime = body.officialTime == null ? null : Number(body.officialTime);
+  if (officialTime !== null && (!Number.isInteger(officialTime) || officialTime <= 0)) throw new Error("Ungültige offizielle Zeit.");
+  if (officialTime !== null && officialTime > 86_400_000) throw new Error("Zeit ist zu lang.");
+  return { segments, lapGroups, frequencies, segmentTotal, officialTime };
+}
+
 function normalizedPersonName(value = "") {
   return String(value)
     .normalize("NFD")
@@ -331,37 +366,7 @@ async function handleApi(request, env) {
     const { results: assignedParticipants } = await env.DB.prepare(`SELECT id FROM participants WHERE event_id = ? AND id IN (${placeholders})`)
       .bind(eventId, ...participantIds).all();
     if (assignedParticipants.length !== participantIds.length) throw new Error("Mindestens eine Person gehört nicht zu diesem Event.");
-    if (!Array.isArray(body.segments) || !body.segments.length) throw new Error("Keine Zeiten vorhanden.");
-    const segments = body.segments.map((value) => value === null ? null : Number(value));
-    if (segments.some((value) => value !== null && (!Number.isInteger(value) || value <= 0))) throw new Error("Ungültige Abschnittszeit.");
-    if (!segments.some((value) => Number.isInteger(value) && value > 0)) throw new Error("Keine Zeiten vorhanden.");
-    if (segments.length > discipline.laps) throw new Error(`Für diese Disziplin sind höchstens ${discipline.laps} Abschnitte erlaubt.`);
-    const lapGroups = body.lapGroups === undefined
-      ? segments.map((_, index) => [index + 1])
-      : body.lapGroups;
-    if (!Array.isArray(lapGroups) || lapGroups.length !== segments.length) throw new Error("Ungültige Lap-Bereiche.");
-    const coveredLaps = [];
-    lapGroups.forEach((group) => {
-      if (!Array.isArray(group) || !group.length || group.some((lap) => !Number.isInteger(lap) || lap < 1 || lap > discipline.laps)) {
-        throw new Error("Ungültige Lap-Bereiche.");
-      }
-      if (group.some((lap, index) => index > 0 && lap !== group[index - 1] + 1)) throw new Error("Es dürfen nur benachbarte Laps verbunden werden.");
-      coveredLaps.push(...group);
-    });
-    if ((!discipline.flexible && coveredLaps.length !== discipline.laps) || coveredLaps.some((lap, index) => lap !== index + 1) || coveredLaps.length > discipline.laps) {
-      throw new Error(`Für diese Disziplin müssen die Lap-Bereiche 1 bis ${discipline.laps} lückenlos abdecken.`);
-    }
-    const frequencies = body.frequencies === undefined
-      ? segments.map(() => null)
-      : body.frequencies;
-    if (!Array.isArray(frequencies) || frequencies.length !== segments.length) throw new Error("Ungültige Frequenzwerte.");
-    if (frequencies.some((value) => value !== null && (!Number.isInteger(value) || value < 1 || value > 999))) {
-      throw new Error("Frequenzen müssen ganze Zahlen von 1 bis 999 sein.");
-    }
-    const segmentTotal = segments.reduce((sum, value) => sum + (value || 0), 0);
-    const officialTime = body.officialTime == null ? null : Number(body.officialTime);
-    if (officialTime !== null && (!Number.isInteger(officialTime) || officialTime <= 0)) throw new Error("Ungültige offizielle Zeit.");
-    if (officialTime !== null && officialTime > 86_400_000) throw new Error("Zeit ist zu lang.");
+    const { segments, lapGroups, frequencies, segmentTotal, officialTime } = validatedResultTiming(body, discipline);
     const id = crypto.randomUUID();
     const resultInsert = env.DB.prepare(`
       INSERT INTO results (id, event_id, participant_id, discipline, total_centiseconds, official_centiseconds, segments_json, frequencies_json, lap_groups_json, submission_key)
@@ -375,6 +380,21 @@ async function handleApi(request, env) {
       await resultInsert.run();
     }
     return json({ id, totalCentiseconds: segmentTotal, officialCentiseconds: officialTime }, 201);
+  }
+
+  if (parts[3] === "results" && parts[4] && parts.length === 5 && method === "PATCH") {
+    const existing = await env.DB.prepare("SELECT id, discipline FROM results WHERE id = ? AND event_id = ?")
+      .bind(parts[4], eventId).first();
+    if (!existing) return fail("Ergebnis nicht gefunden.", 404);
+    const body = await bodyOf(request);
+    const discipline = DISCIPLINES[existing.discipline];
+    const { segments, lapGroups, frequencies, segmentTotal, officialTime } = validatedResultTiming(body, discipline);
+    await env.DB.prepare(`
+      UPDATE results
+      SET total_centiseconds = ?, official_centiseconds = ?, segments_json = ?, frequencies_json = ?, lap_groups_json = ?
+      WHERE id = ? AND event_id = ?
+    `).bind(segmentTotal, officialTime, JSON.stringify(segments), JSON.stringify(frequencies), JSON.stringify(lapGroups), parts[4], eventId).run();
+    return json({ ok: true, totalCentiseconds: segmentTotal, officialCentiseconds: officialTime });
   }
 
   if (parts[3] === "results" && parts[4] && parts.length === 5 && method === "DELETE") {
