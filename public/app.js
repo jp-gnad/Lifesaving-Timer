@@ -609,13 +609,13 @@ async function renderTimer(id) {
       <div class="field official-time-field"><label for="official-time">Offizielle Zeit</label><input id="official-time" inputmode="decimal" placeholder="0:00,00" value="${timer.officialTime === null ? "" : formatTime(timer.officialTime)}" aria-describedby="save-error"></div></div>
       <button class="button secondary edit-mode-toggle" id="edit-mode" type="button">${icon("pencil")} Runden bearbeiten</button>
       ${item.team ? `${assignmentMarkup}<button class="button secondary add-review-person" id="new-review-person" type="button">${icon("user-plus")} Neue Person</button>` : `<div class="review-assignment-row">${assignmentMarkup}<button class="button secondary add-review-person" id="new-review-person" type="button">${icon("user-plus")} Neu</button></div>`}
+      <p class="form-error" id="save-error" role="alert"></p>
       <div class="form-actions save-actions"><button class="button" id="save-result" ${participants.length >= (item.team ? 4 : 1) ? "" : "disabled"}>${icon("save")} Ergebnis speichern</button></div></section>
       <section class="review-editor" id="review-editor" hidden>
         <div class="review-tools"><div class="time-mode-toggle" role="group" aria-label="Zeitdarstellung"><button type="button" class="active" data-time-mode="segment" aria-pressed="true">Sekunden</button><button type="button" data-time-mode="cumulative" aria-pressed="false">Kumuliert</button></div><div class="review-mode-actions"><button class="button secondary small glue-mode-toggle" id="glue-mode" type="button" aria-pressed="false">${icon("link")} Kleben</button><button class="button secondary small" id="finish-edit" type="button">${icon("check")} Fertig</button></div></div>
         <div class="glue-hint" id="glue-hint" hidden><span>Benachbarte Runden über das Kettensymbol verbinden.</span><button class="button secondary small" id="undo-glue" type="button" hidden>${icon("undo")} Rückgängig</button></div>
         <div class="edit-times" id="edit-times"></div>
-      </section>
-      <p class="form-error" id="save-error" role="alert"></p></div>
+      </section></div>
       <dialog id="review-person-dialog"><form class="dialog-body" id="review-person-form">
         <div class="dialog-title-row"><h2>Neue Person</h2><button type="button" class="button secondary icon-button" data-close aria-label="Schließen">${icon("x")}</button></div>
         <div class="form-grid">
