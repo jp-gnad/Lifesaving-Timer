@@ -580,3 +580,27 @@ body.timer-page.review-active { position: fixed; inset: 0; width: 100%; height: 
   .viewer-list-heading { align-items: stretch; flex-direction: column; }
   .result-view-toggle { width: 100%; }
 }
+
+@media (hover: hover) and (pointer: fine) {
+  body.home-page, body.event-page, body.people-page {
+    height: auto;
+    min-height: 100vh;
+    overflow-y: auto;
+    overscroll-behavior: auto;
+  }
+  .home-page .container, .event-page .container, .people-page .container {
+    height: auto;
+    min-height: calc(100vh - 58px);
+    overflow: visible;
+    padding-bottom: 48px;
+  }
+  .home-page .event-list-section, .people-list-section, .person-groups {
+    flex: none;
+    min-height: auto;
+    overflow: visible;
+  }
+  .timer-page .review-content, .timer-page .review-view.normal-review .review-content {
+    overflow-y: auto;
+  }
+  .portrait-lock { display: none !important; }
+}
