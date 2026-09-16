@@ -222,7 +222,8 @@ function setDocumentTitle(title) {
 function updateViewportLock() {
   const locked = document.body.classList.contains("timer-locked")
     || document.body.classList.contains("review-active")
-    || document.body.classList.contains("event-page");
+    || document.body.classList.contains("event-page")
+    || document.body.classList.contains("people-page");
   viewportMeta.content = locked
     ? "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     : defaultViewport;
@@ -311,7 +312,6 @@ async function renderHome() {
 
 async function renderEvent(id) {
   const { event, participants } = await api(`/events/${id}`);
-  participants.sort(compareParticipantsByOrganization);
   setDocumentTitle(event.name);
   app.innerHTML = `
     <a class="back" href="#/">${icon("arrow-left")} Events</a>
@@ -321,15 +321,8 @@ async function renderEvent(id) {
     <div class="event-action-grid">
       <a class="card event-action-tile" href="#/timer/${id}"><span class="event-action-icon">${icon("timer")}</span><strong>Timer</strong></a>
       <a class="card event-action-tile" href="#/viewer/${id}"><span class="event-action-icon">${icon("table")}</span><strong>Ergebnisse</strong></a>
+      <a class="card event-action-tile" href="#/people/${id}"><span class="event-action-icon">${icon("users")}</span><strong>Personen</strong></a>
     </div>
-    <section class="section" aria-labelledby="people-heading">
-      <div class="section-head"><h2 id="people-heading">Personen</h2><button class="button secondary" id="new-person">${icon("user-plus")} Hinzufügen</button></div>
-      ${participants.length ? `<div class="person-list">
-        ${participants.map((person) => `<button class="person-card person-card-button edit-person" type="button" data-id="${person.id}" aria-label="${escapeHtml(person.name)} bearbeiten">
-          <div class="person-card-content">${personAvatar(person)}<div class="person-card-copy"><div class="person-head"><strong>${escapeHtml(person.name)} (${String(person.birth_year).slice(-2)})</strong></div>
-          <div class="person-details"><span>${escapeHtml(person.organization)} - ${escapeHtml(person.age_group)} - ${person.gender === "male" ? "m" : "w"}</span></div></div></div>
-        </button>`).join("")}</div>` : `<div class="empty">Noch keine Personen.</div>`}
-    </section>
     <dialog id="event-edit-dialog"><form class="dialog-body" id="event-edit-form">
       <h2>Event bearbeiten</h2>
       <div class="form-grid">
@@ -340,17 +333,6 @@ async function renderEvent(id) {
       <p class="form-error" id="event-edit-error" role="alert"></p>
       <div class="form-actions"><button type="button" class="button secondary" data-close>Abbrechen</button><button class="button">Event speichern</button></div>
       <div class="dialog-delete-row"><button type="button" class="button danger small" id="delete-event-dialog">${icon("trash")} Event löschen</button></div>
-    </form></dialog>
-    <dialog id="person-dialog"><form class="dialog-body" id="person-form">
-      <h2 id="person-dialog-title">Person hinzufügen</h2><div class="form-grid">
-        <div class="field full"><label for="person-name">Name</label><input id="person-name" name="name" maxlength="120" autocomplete="name" required></div>
-        <div class="field"><label for="birth-year">Jahrgang</label><input id="birth-year" name="birthYear" type="number" min="1900" max="2200" inputmode="numeric" required></div>
-        <div class="field"><label for="age-group">Altersklasse</label><input id="age-group" name="ageGroup" maxlength="40" required placeholder="z. B. AK 15/16"></div>
-        <div class="field"><label for="gender">Geschlecht</label><select id="gender" name="gender" required><option value="female">Weiblich</option><option value="male">Männlich</option></select></div>
-        <div class="field"><label for="organization">Gliederung</label><input id="organization" name="organization" maxlength="120" required placeholder="Verein / Ortsgruppe"></div>
-      </div><p class="form-error" id="person-error" role="alert"></p>
-      <div class="form-actions"><button type="button" class="button secondary" data-close>Abbrechen</button><button class="button">Person speichern</button></div>
-      <div class="dialog-delete-row"><button type="button" class="button danger small" id="delete-person-dialog" hidden>${icon("trash")} Person löschen</button></div>
     </form></dialog>`;
 
   const eventDialog = document.querySelector("#event-edit-dialog");
@@ -375,6 +357,43 @@ async function renderEvent(id) {
       submitButton.disabled = false;
     }
   });
+
+  document.querySelector("#delete-event-dialog").addEventListener("click", async (deleteEvent) => {
+    if (!confirm(`Event „${event.name}“ mit allen Personen und Ergebnissen unwiderruflich löschen?`)) return;
+    try {
+      deleteEvent.currentTarget.disabled = true;
+      await api(`/events/${id}`, { method: "DELETE" });
+      showToast("Event wurde gelöscht.");
+      location.hash = "#/";
+    } catch (err) { showToast(err.message); deleteEvent.currentTarget.disabled = false; }
+  });
+}
+
+async function renderPeople(id) {
+  const { event, participants } = await api(`/events/${id}`);
+  participants.sort(compareParticipantsByOrganization);
+  setDocumentTitle(`Personen – ${event.name}`);
+  app.innerHTML = `
+    <a class="back" href="#/event/${id}">${icon("arrow-left")} ${escapeHtml(event.name)}</a>
+    <div class="page-head people-page-head"><h1>Personen</h1><button class="button secondary" id="new-person">${icon("user-plus")} Hinzufügen</button></div>
+    <section class="people-list-section" aria-label="Personenliste">
+      ${participants.length ? `<div class="person-list">
+        ${participants.map((person) => `<button class="person-card person-card-button edit-person" type="button" data-id="${person.id}" aria-label="${escapeHtml(person.name)} bearbeiten">
+          <div class="person-card-content">${personAvatar(person)}<div class="person-card-copy"><div class="person-head"><strong>${escapeHtml(person.name)} (${String(person.birth_year).slice(-2)})</strong></div>
+          <div class="person-details"><span>${escapeHtml(person.organization)} - ${escapeHtml(person.age_group)} - ${person.gender === "male" ? "m" : "w"}</span></div></div></div>
+        </button>`).join("")}</div>` : `<div class="empty">Noch keine Personen.</div>`}
+    </section>
+    <dialog id="person-dialog"><form class="dialog-body" id="person-form">
+      <h2 id="person-dialog-title">Person hinzufügen</h2><div class="form-grid">
+        <div class="field full"><label for="person-name">Name</label><input id="person-name" name="name" maxlength="120" autocomplete="name" required></div>
+        <div class="field"><label for="birth-year">Jahrgang</label><input id="birth-year" name="birthYear" type="number" min="1900" max="2200" inputmode="numeric" required></div>
+        <div class="field"><label for="age-group">Altersklasse</label><input id="age-group" name="ageGroup" maxlength="40" required placeholder="z. B. AK 15/16"></div>
+        <div class="field"><label for="gender">Geschlecht</label><select id="gender" name="gender" required><option value="female">Weiblich</option><option value="male">Männlich</option></select></div>
+        <div class="field"><label for="organization">Gliederung</label><input id="organization" name="organization" maxlength="120" required placeholder="Verein / Ortsgruppe"></div>
+      </div><p class="form-error" id="person-error" role="alert"></p>
+      <div class="form-actions"><button type="button" class="button secondary" data-close>Abbrechen</button><button class="button">Person speichern</button></div>
+      <div class="dialog-delete-row"><button type="button" class="button danger small" id="delete-person-dialog" hidden>${icon("trash")} Person löschen</button></div>
+    </form></dialog>`;
 
   const dialog = document.querySelector("#person-dialog");
   const personForm = document.querySelector("#person-form");
@@ -412,13 +431,12 @@ async function renderEvent(id) {
       const editId = submitEvent.currentTarget.dataset.editId;
       await api(`/events/${id}/participants${editId ? `/${editId}` : ""}`, { method: editId ? "PATCH" : "POST", body: JSON.stringify(values) });
       showToast(editId ? "Person wurde aktualisiert." : "Person wurde hinzugefügt.");
-      await renderEvent(id);
+      await renderPeople(id);
     } catch (err) {
       document.querySelector("#person-error").textContent = err.message;
       button.disabled = false;
     }
   });
-
   deletePersonButton.addEventListener("click", async () => {
     const person = participants.find((item) => item.id === personForm.dataset.editId);
     if (!person) return;
@@ -428,18 +446,8 @@ async function renderEvent(id) {
       deletePersonButton.disabled = true;
       await api(`/events/${id}/participants/${person.id}`, { method: "DELETE" });
       showToast("Person wurde gelöscht.");
-      await renderEvent(id);
+      await renderPeople(id);
     } catch (err) { showToast(err.message); deletePersonButton.disabled = false; }
-  });
-
-  document.querySelector("#delete-event-dialog").addEventListener("click", async (deleteEvent) => {
-    if (!confirm(`Event „${event.name}“ mit allen Personen und Ergebnissen unwiderruflich löschen?`)) return;
-    try {
-      deleteEvent.currentTarget.disabled = true;
-      await api(`/events/${id}`, { method: "DELETE" });
-      showToast("Event wurde gelöscht.");
-      location.hash = "#/";
-    } catch (err) { showToast(err.message); deleteEvent.currentTarget.disabled = false; }
   });
 }
 
@@ -1373,12 +1381,14 @@ async function renderRoute() {
   const current = route();
   document.body.classList.toggle("timer-page", current.page === "timer");
   document.body.classList.toggle("event-page", current.page === "event");
+  document.body.classList.toggle("people-page", current.page === "people");
   setReviewInteractionLock(false);
   setTimerInteractionLock(false);
   try {
     if (current.page === "home") return await renderHome();
     if (!current.id) throw new Error("Die Adresse ist unvollständig.");
     if (current.page === "event") return await renderEvent(current.id);
+    if (current.page === "people") return await renderPeople(current.id);
     if (current.page === "timer") return await renderTimer(current.id);
     if (current.page === "viewer") return await renderViewer(current.id, current.discipline, current.gender);
     throw new Error("Diese Seite gibt es nicht.");

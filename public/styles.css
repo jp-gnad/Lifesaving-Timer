@@ -81,14 +81,15 @@ h3 { font-size: 17px; }
 .event-summary { margin: 5px 0 0; color: var(--muted); font-size: 14px; line-height: 1.35; }
 .event-page .event-summary { margin-top: 8px; }
 .event-page .event-page-head { margin-bottom: 38px; }
-.event-page .event-action-grid + .section { margin-top: 44px; }
-body.event-page { height: 100dvh; overflow: hidden; overscroll-behavior: none; }
-body.event-page .site-header { height: calc(58px + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); }
-.event-page .container { height: calc(100dvh - 58px - env(safe-area-inset-top)); min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+body.event-page, body.people-page { height: 100dvh; overflow: hidden; overscroll-behavior: none; }
+body.event-page .site-header, body.people-page .site-header { height: calc(58px + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); }
+.event-page .container, .people-page .container { height: calc(100dvh - 58px - env(safe-area-inset-top)); min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
 .event-page .container > .back, .event-page .event-page-head, .event-page .event-action-grid { flex: 0 0 auto; }
-.event-page .event-action-grid + .section { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
-.event-page .event-action-grid + .section .section-head { flex: 0 0 auto; }
-.event-page .person-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+.event-page .event-action-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.people-page .container > .back, .people-page .people-page-head { flex: 0 0 auto; }
+.people-page .people-page-head { margin-bottom: 12px; }
+.people-list-section { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.people-page .person-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
 .back { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; margin-bottom: 10px; overflow: hidden; color: var(--primary-dark); font-size: 14px; font-weight: 650; line-height: 1.25; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
 .back:hover { text-decoration: underline; }
 .icon { width: 1.15em; height: 1.15em; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
@@ -462,8 +463,8 @@ body.timer-page.review-active { position: fixed; inset: 0; width: 100%; height: 
 @media (max-width: 430px) {
   .site-header { height: 52px; }
   .container { padding-top: 12px; }
-  body.event-page .site-header { height: calc(52px + env(safe-area-inset-top)); }
-  .event-page .container { height: calc(100dvh - 52px - env(safe-area-inset-top)); }
+  body.event-page .site-header, body.people-page .site-header { height: calc(52px + env(safe-area-inset-top)); }
+  .event-page .container, .people-page .container { height: calc(100dvh - 52px - env(safe-area-inset-top)); }
   h1 { font-size: 24px; }
   .page-head { margin-bottom: 10px; }
   .back { margin-bottom: 7px; font-size: 13px; }
@@ -473,6 +474,11 @@ body.timer-page.review-active { position: fixed; inset: 0; width: 100%; height: 
   .event-action-tile { gap: 11px; padding: 12px; }
   .event-action-icon { width: 66px; height: 66px; border-radius: 14px; }
   .event-action-icon .icon { width: 40px; height: 40px; }
+  .event-page .event-action-grid { gap: 8px; }
+  .event-page .event-action-tile { gap: 8px; padding: 8px 5px; }
+  .event-page .event-action-tile strong { font-size: 14px; }
+  .event-page .event-action-icon { width: 52px; height: 52px; border-radius: 12px; }
+  .event-page .event-action-icon .icon { width: 32px; height: 32px; }
   .result-segments { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .form-actions { grid-template-columns: 1fr; }
   .team-assignment { grid-template-columns: 1fr; }
