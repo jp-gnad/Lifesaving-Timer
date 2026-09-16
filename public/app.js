@@ -1921,9 +1921,12 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
             const glued = group.length > 1;
             return `<span class="${glued ? "glued-result-lap" : ""}"><span class="result-lap-label">${escapeHtml(disciplineLapGroupLabel(result.discipline, group))}${Number.isInteger(result.frequencies?.[lap]) ? `<small>${result.frequencies[lap]}/min</small>` : ""}</span><strong>${value === null ? "–" : formatTime(value)}</strong></span>`;
           }).join("")}</div></details>`;
+        const editButton = `<button class="button secondary small icon-button edit-result" data-id="${result.id}" aria-label="Ergebnis bearbeiten" title="Bearbeiten">${icon("pencil")}</button>`;
+        const cardHead = teamMembers.length
+          ? `<div class="result-head"><div>${resultIdentity}</div>${editButton}</div>${details}`
+          : `<div class="result-head"><div>${resultIdentity}${details}</div>${editButton}</div>`;
         return `<article class="result-card">
-        <div class="result-head"><div>${resultIdentity}${details}</div>
-        <button class="button secondary small icon-button edit-result" data-id="${result.id}" aria-label="Ergebnis bearbeiten" title="Bearbeiten">${icon("pencil")}</button></div>
+        ${cardHead}
         <div class="result-times"><div><span>Gestoppt</span><strong>${formatTime(stoppedTime)}</strong></div><div class="official"><span>Offiziell</span><strong>${result.official_centiseconds == null ? "–" : formatTime(result.official_centiseconds)}</strong></div></div>
         ${expandedDetails}
       </article>`;
