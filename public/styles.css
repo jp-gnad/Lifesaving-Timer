@@ -281,7 +281,15 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 .participant-picker-dialog { width: min(520px, calc(100% - 16px)); height: min(720px, calc(100dvh - 32px)); overflow: hidden; }
 .participant-picker-body { height: 100%; min-height: 0; display: flex; flex-direction: column; }
 .participant-picker-body .dialog-title-row { flex: 0 0 auto; margin-bottom: 12px; }
-.participant-picker-body .participant-search { flex: 0 0 auto; }
+.participant-search-row { flex: 0 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) 50px; align-items: end; gap: 8px; }
+.participant-search-control { position: relative; }
+.participant-search-control input { padding-right: 42px; }
+.participant-search-control input::-webkit-search-cancel-button { display: none; }
+.participant-search-clear { position: absolute; top: 50%; right: 4px; width: 36px; height: 36px; transform: translateY(-50%); border: 0; border-radius: 50%; padding: 8px; background: transparent; color: var(--muted); cursor: pointer; display: grid; place-items: center; }
+.participant-search-clear .icon { width: 18px; height: 18px; }
+.participant-filter-toggle { width: 50px; height: 50px; border: 1px solid #bec9d8; border-radius: 8px; padding: 12px; background: #fff; color: var(--muted); cursor: pointer; display: grid; place-items: center; }
+.participant-filter-toggle.active, .participant-filter-toggle.filtered { border-color: #8eb9f3; background: #edf6ff; color: var(--primary-dark); }
+.participant-filter-toggle .icon { width: 22px; height: 22px; }
 .participant-filters { flex: 0 0 auto; display: grid; grid-template-columns: minmax(0, .75fr) minmax(0, 1.25fr); align-items: end; gap: 8px; margin-top: 10px; }
 .participant-filters select { min-height: 40px; padding: 7px 9px; }
 .participant-gender-filter { min-height: 40px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; border: 1px solid var(--line); border-radius: 8px; padding: 2px; background: var(--surface-alt); }

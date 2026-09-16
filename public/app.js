@@ -31,7 +31,7 @@ let animationFrame = null;
 let toastTimer = null;
 
 function icon(name) {
-  return `<svg class="icon" aria-hidden="true"><use href="/icons.svg?v=lap-glue#${name}"></use></svg>`;
+  return `<svg class="icon" aria-hidden="true"><use href="/icons.svg?v=participant-filters#${name}"></use></svg>`;
 }
 
 function escapeHtml(value = "") {
@@ -631,10 +631,10 @@ async function renderTimer(id) {
         <div class="glue-hint" id="glue-hint" hidden><span>Benachbarte Runden über das Kettensymbol verbinden.</span><button class="button secondary small" id="undo-glue" type="button" hidden>${icon("undo")} Rückgängig</button></div>
         <div class="edit-times" id="edit-times"></div>
       </section></div>
-      <dialog class="participant-picker-dialog" id="participant-picker-dialog"><div class="dialog-body participant-picker-body">
+      <dialog class="participant-picker-dialog" id="participant-picker-dialog" tabindex="-1"><div class="dialog-body participant-picker-body">
         <div class="dialog-title-row"><h2>Person auswählen</h2><button type="button" class="button secondary icon-button" data-close aria-label="Schließen">${icon("x")}</button></div>
-        <div class="field participant-search"><label for="participant-search">Suchen</label><input id="participant-search" type="search" inputmode="search" autocomplete="off" placeholder="Name oder Gliederung"></div>
-        <div class="participant-filters">
+        <div class="participant-search-row"><div class="field participant-search"><label for="participant-search">Suchen</label><div class="participant-search-control"><input id="participant-search" type="search" inputmode="search" autocomplete="off" placeholder="Name oder Gliederung"><button class="participant-search-clear" id="participant-search-clear" type="button" aria-label="Suche löschen" hidden>${icon("x")}</button></div></div><button class="participant-filter-toggle" id="participant-filter-toggle" type="button" aria-label="Filter anzeigen" aria-expanded="false" aria-controls="participant-filters">${icon("filter")}</button></div>
+        <div class="participant-filters" id="participant-filters" hidden>
           <div class="field"><span class="label">Geschlecht</span><div class="participant-gender-filter" role="group" aria-label="Nach Geschlecht filtern"><button type="button" class="active" data-picker-gender="" aria-pressed="true">Alle</button><button type="button" data-picker-gender="female" aria-pressed="false">W</button><button type="button" data-picker-gender="male" aria-pressed="false">M</button></div></div>
           <div class="field"><label for="participant-age-filter">Altersklasse</label><select id="participant-age-filter"><option value="">Alle</option></select></div>
         </div>
@@ -663,6 +663,9 @@ async function renderTimer(id) {
     const participantPickerList = review.querySelector("#participant-picker-list");
     const participantPickerEmpty = review.querySelector("#participant-picker-empty");
     const participantSearch = review.querySelector("#participant-search");
+    const participantSearchClear = review.querySelector("#participant-search-clear");
+    const participantFilters = review.querySelector("#participant-filters");
+    const participantFilterToggle = review.querySelector("#participant-filter-toggle");
     const participantAgeFilter = review.querySelector("#participant-age-filter");
     const participantPickerTriggers = [...review.querySelectorAll(".participant-picker-trigger")];
     const personForm = review.querySelector("#review-person-form");
@@ -712,8 +715,13 @@ async function renderTimer(id) {
     function openParticipantPicker(select) {
       activeParticipantSelect = select;
       participantSearch.value = "";
+      participantSearchClear.hidden = true;
       participantGenderFilter = "";
       participantAgeFilter.value = "";
+      participantFilters.hidden = true;
+      participantFilterToggle.classList.remove("active", "filtered");
+      participantFilterToggle.setAttribute("aria-expanded", "false");
+      participantFilterToggle.setAttribute("aria-label", "Filter anzeigen");
       review.querySelectorAll("[data-picker-gender]").forEach((button) => {
         const active = button.dataset.pickerGender === "";
         button.classList.toggle("active", active);
@@ -722,7 +730,7 @@ async function renderTimer(id) {
       renderParticipantAgeFilter();
       renderParticipantPicker();
       participantPickerDialog.showModal();
-      participantSearch.focus();
+      participantPickerDialog.focus({ preventScroll: true });
     }
 
     function syncLapGroupsFromInputs() {
@@ -884,8 +892,27 @@ async function renderTimer(id) {
     participantPickerTriggers.forEach((trigger) => trigger.addEventListener("click", () => {
       openParticipantPicker(review.querySelector(`#${trigger.dataset.selectId}`));
     }));
-    participantSearch.addEventListener("input", renderParticipantPicker);
-    participantAgeFilter.addEventListener("change", renderParticipantPicker);
+    participantSearch.addEventListener("input", () => {
+      participantSearchClear.hidden = !participantSearch.value;
+      renderParticipantPicker();
+    });
+    participantSearchClear.addEventListener("click", () => {
+      participantSearch.value = "";
+      participantSearchClear.hidden = true;
+      renderParticipantPicker();
+      participantSearch.focus();
+    });
+    participantFilterToggle.addEventListener("click", () => {
+      const expanded = participantFilters.hidden;
+      participantFilters.hidden = !expanded;
+      participantFilterToggle.classList.toggle("active", expanded);
+      participantFilterToggle.setAttribute("aria-expanded", String(expanded));
+      participantFilterToggle.setAttribute("aria-label", expanded ? "Filter ausblenden" : "Filter anzeigen");
+    });
+    participantAgeFilter.addEventListener("change", () => {
+      participantFilterToggle.classList.toggle("filtered", Boolean(participantGenderFilter || participantAgeFilter.value));
+      renderParticipantPicker();
+    });
     review.querySelectorAll("[data-picker-gender]").forEach((button) => button.addEventListener("click", () => {
       participantGenderFilter = button.dataset.pickerGender;
       review.querySelectorAll("[data-picker-gender]").forEach((candidate) => {
@@ -893,6 +920,7 @@ async function renderTimer(id) {
         candidate.classList.toggle("active", active);
         candidate.setAttribute("aria-pressed", String(active));
       });
+      participantFilterToggle.classList.toggle("filtered", Boolean(participantGenderFilter || participantAgeFilter.value));
       renderParticipantPicker();
     }));
     participantPickerList.addEventListener("click", (clickEvent) => {
