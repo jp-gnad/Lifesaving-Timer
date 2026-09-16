@@ -820,7 +820,7 @@ async function renderTimer(id) {
       </div>
       <section class="card clock-card" aria-label="Stoppuhr">
         <div class="clock-status" id="clock-status">Bereit</div><div class="clock" id="clock" aria-live="off">0:00,00</div>
-        <div class="frequency-progress" id="frequency-progress" aria-hidden="true"><span id="frequency-bar"></span></div>
+        <div class="frequency-progress" id="frequency-progress" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
         <p class="progress-note" id="progress">0 / 20 Laps</p>
         <div class="timer-actions">
           <button class="button secondary timer-control" id="left-action" disabled>${icon("trash")} Löschen</button>
@@ -836,7 +836,8 @@ async function renderTimer(id) {
       <section class="review-view" id="review-view" hidden></section>
     </div>`;
 
-  const elements = Object.fromEntries(["timer-view", "review-view", "mode-button", "mode-name", "mode-laps", "discipline-dialog", "clock-status", "clock", "frequency-progress", "frequency-bar", "left-action", "right-action", "progress", "lap-list"].map((key) => [key, document.querySelector(`#${key}`)]));
+  const elements = Object.fromEntries(["timer-view", "review-view", "mode-button", "mode-name", "mode-laps", "discipline-dialog", "clock-status", "clock", "frequency-progress", "left-action", "right-action", "progress", "lap-list"].map((key) => [key, document.querySelector(`#${key}`)]));
+  let frequencyFeedbackTimer = null;
 
   const currentCs = () => timer.status === "running" ? timer.displayed + Math.floor((performance.now() - timer.startedAt) / 10) : timer.displayed;
   const capturedTotal = () => timer.segments.reduce((sum, value) => sum + value, 0);
@@ -888,29 +889,42 @@ async function renderTimer(id) {
   }
 
   function resetFrequencyCapture() {
+    clearTimeout(frequencyFeedbackTimer);
+    frequencyFeedbackTimer = null;
     timer.frequencyStartedAt = null;
     timer.frequencyTaps = 0;
     elements["frequency-progress"].classList.remove("active");
-    elements["frequency-bar"].style.transform = "scaleX(0)";
+    elements["frequency-progress"].querySelectorAll("span").forEach((step) => step.classList.remove("filled"));
   }
 
-  function finishFrequency(endedAt = performance.now()) {
+  function showFrequencySteps(filledSteps) {
+    elements["frequency-progress"].classList.toggle("active", filledSteps > 0);
+    elements["frequency-progress"].querySelectorAll("span").forEach((step, index) => {
+      step.classList.toggle("filled", index < filledSteps);
+    });
+  }
+
+  function finishFrequency(endedAt = performance.now(), showCompletedSteps = false) {
     if (timer.frequencyStartedAt === null) return;
-    const elapsedMs = Math.min(10_000, Math.max(1, endedAt - timer.frequencyStartedAt));
+    const elapsedMs = Math.max(1, endedAt - timer.frequencyStartedAt);
     timer.frequencies[timer.segments.length] = Math.round((timer.frequencyTaps * 60_000) / elapsedMs);
-    resetFrequencyCapture();
-  }
-
-  function updateFrequencyProgress(now = performance.now()) {
-    if (timer.frequencyStartedAt === null) return;
-    const elapsedMs = now - timer.frequencyStartedAt;
-    if (elapsedMs >= 10_000) {
-      finishFrequency(timer.frequencyStartedAt + 10_000);
-      renderLaps();
+    timer.frequencyStartedAt = null;
+    timer.frequencyTaps = 0;
+    if (!showCompletedSteps) {
+      showFrequencySteps(0);
       return;
     }
-    elements["frequency-progress"].classList.add("active");
-    elements["frequency-bar"].style.transform = `scaleX(${1 - elapsedMs / 10_000})`;
+    showFrequencySteps(5);
+    clearTimeout(frequencyFeedbackTimer);
+    frequencyFeedbackTimer = setTimeout(() => {
+      frequencyFeedbackTimer = null;
+      if (timer.frequencyStartedAt === null) showFrequencySteps(0);
+    }, 300);
+  }
+
+  function updateFrequencyProgress() {
+    if (timer.frequencyStartedAt === null) return;
+    showFrequencySteps(timer.frequencyTaps);
   }
 
   function tapFrequency() {
@@ -919,10 +933,14 @@ async function renderTimer(id) {
     if (timer.frequencyStartedAt === null) {
       timer.frequencyStartedAt = now;
       timer.frequencyTaps = 1;
-    } else if (now - timer.frequencyStartedAt < 10_000) {
+    } else {
       timer.frequencyTaps += 1;
     }
-    updateFrequencyProgress(now);
+    updateFrequencyProgress();
+    if (timer.frequencyTaps >= 5) {
+      finishFrequency(now, true);
+      renderLaps();
+    }
   }
 
   function lapValues(time, index, isCurrent = false, isPlaceholder = false) {
