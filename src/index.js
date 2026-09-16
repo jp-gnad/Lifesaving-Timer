@@ -384,18 +384,53 @@ async function handleApi(request, env) {
   }
 
   if (parts[3] === "results" && parts[4] && parts.length === 5 && method === "PATCH") {
-    const existing = await env.DB.prepare("SELECT id, discipline, note FROM results WHERE id = ? AND event_id = ?")
+    const existing = await env.DB.prepare("SELECT id, discipline, note, participant_id FROM results WHERE id = ? AND event_id = ?")
       .bind(parts[4], eventId).first();
     if (!existing) return fail("Ergebnis nicht gefunden.", 404);
     const body = await bodyOf(request);
     const discipline = DISCIPLINES[existing.discipline];
     const note = body.note === undefined ? existing.note : cleanText(body.note, "Notiz", 300, false);
+    let participantIds;
+    if (discipline.team) {
+      if (body.participantIds === undefined) {
+        const { results: currentMembers } = await env.DB.prepare(`
+          SELECT participant_id FROM result_members WHERE result_id = ? ORDER BY position
+        `).bind(parts[4]).all();
+        participantIds = currentMembers.map((member) => member.participant_id);
+      } else {
+        participantIds = body.participantIds;
+      }
+    } else {
+      participantIds = [body.participantId === undefined ? existing.participant_id : body.participantId];
+    }
+    if (!Array.isArray(participantIds) || participantIds.some((participantId) => typeof participantId !== "string" || !participantId)) {
+      throw new Error("Personenzuordnung fehlt.");
+    }
+    if (discipline.team && (participantIds.length !== 4 || new Set(participantIds).size !== 4)) {
+      throw new Error("Eine Mannschaft benötigt vier unterschiedliche Personen.");
+    }
+    const participantPlaceholders = participantIds.map(() => "?").join(",");
+    const { results: assignedParticipants } = await env.DB.prepare(`
+      SELECT id FROM participants WHERE event_id = ? AND id IN (${participantPlaceholders})
+    `).bind(eventId, ...participantIds).all();
+    if (assignedParticipants.length !== participantIds.length) throw new Error("Mindestens eine Person gehört nicht zu diesem Event.");
     const { segments, lapGroups, frequencies, segmentTotal, officialTime } = validatedResultTiming(body, discipline);
-    await env.DB.prepare(`
+    const resultUpdate = env.DB.prepare(`
       UPDATE results
-      SET total_centiseconds = ?, official_centiseconds = ?, segments_json = ?, frequencies_json = ?, lap_groups_json = ?, note = ?
+      SET participant_id = ?, total_centiseconds = ?, official_centiseconds = ?, segments_json = ?, frequencies_json = ?, lap_groups_json = ?, note = ?
       WHERE id = ? AND event_id = ?
-    `).bind(segmentTotal, officialTime, JSON.stringify(segments), JSON.stringify(frequencies), JSON.stringify(lapGroups), note, parts[4], eventId).run();
+    `).bind(participantIds[0], segmentTotal, officialTime, JSON.stringify(segments), JSON.stringify(frequencies), JSON.stringify(lapGroups), note, parts[4], eventId);
+    if (discipline.team) {
+      await env.DB.batch([
+        resultUpdate,
+        env.DB.prepare("DELETE FROM result_members WHERE result_id = ?").bind(parts[4]),
+        ...participantIds.map((participantId, index) => env.DB.prepare(`
+          INSERT INTO result_members (result_id, participant_id, position) VALUES (?, ?, ?)
+        `).bind(parts[4], participantId, index + 1)),
+      ]);
+    } else {
+      await resultUpdate.run();
+    }
     return json({ ok: true, totalCentiseconds: segmentTotal, officialCentiseconds: officialTime });
   }
 

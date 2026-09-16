@@ -1716,7 +1716,8 @@ async function renderTimer(id) {
 }
 
 async function renderViewer(id, initialDiscipline = null, initialGender = null) {
-  const { event } = await api(`/events/${id}`);
+  const { event, participants } = await api(`/events/${id}`);
+  participants.sort(compareParticipantsByOrganization);
   const initialItem = disciplines[initialDiscipline];
   const validInitialGender = initialItem?.mixed ? initialGender === "mixed" : ["female", "male"].includes(initialGender);
   let selected = initialItem && validInitialGender
@@ -1736,7 +1737,17 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
       <p class="form-error" id="result-edit-error" role="alert"></p>
       <div class="form-actions"><button type="button" class="button secondary" data-close>Abbrechen</button><button class="button">Speichern</button></div>
       <div class="dialog-delete-row"><button type="button" class="button danger small" id="delete-result-dialog">${icon("trash")} Ergebnis löschen</button></div>
-    </form></dialog>`;
+    </form></dialog>
+    <dialog class="participant-picker-dialog" id="result-participant-picker-dialog" tabindex="-1"><div class="dialog-body participant-picker-body">
+      <div class="dialog-title-row"><h2>Person auswählen</h2><button type="button" class="button secondary icon-button" data-close aria-label="Schließen">${icon("x")}</button></div>
+      <div class="participant-search-row"><div class="field participant-search"><label for="result-participant-search">Suchen</label><div class="participant-search-control"><input id="result-participant-search" type="search" inputmode="search" autocomplete="off" placeholder="Name oder Gliederung"><button class="participant-search-clear" id="result-participant-search-clear" type="button" aria-label="Suche löschen" hidden>${icon("x")}</button></div></div><button class="participant-filter-toggle" id="result-participant-filter-toggle" type="button" aria-label="Filter anzeigen" aria-expanded="false" aria-controls="result-participant-filters">${icon("filter")}</button></div>
+      <div class="participant-filters" id="result-participant-filters" hidden>
+        <div class="field"><span class="label">Geschlecht</span><div class="participant-gender-filter" role="group" aria-label="Nach Geschlecht filtern"><button type="button" class="active" data-result-picker-gender="" aria-pressed="true">Alle</button><button type="button" data-result-picker-gender="female" aria-pressed="false">W</button><button type="button" data-result-picker-gender="male" aria-pressed="false">M</button></div></div>
+        <div class="field"><label for="result-participant-age-filter">Altersklasse</label><select id="result-participant-age-filter"><option value="">Alle</option></select></div>
+      </div>
+      <div class="participant-picker-list" id="result-participant-picker-list" role="listbox" aria-label="Personen"></div>
+      <p class="participant-picker-empty" id="result-participant-picker-empty" hidden>Keine Person gefunden.</p>
+    </div></dialog>`;
 
   const overviewHead = document.querySelector("#viewer-overview-head");
   const resultsRoot = document.querySelector("#results");
@@ -1746,13 +1757,80 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
   const resultEditFields = document.querySelector("#result-edit-fields");
   const resultEditError = document.querySelector("#result-edit-error");
   const deleteResultButton = document.querySelector("#delete-result-dialog");
+  const resultParticipantPickerDialog = document.querySelector("#result-participant-picker-dialog");
+  const resultParticipantPickerList = document.querySelector("#result-participant-picker-list");
+  const resultParticipantPickerEmpty = document.querySelector("#result-participant-picker-empty");
+  const resultParticipantSearch = document.querySelector("#result-participant-search");
+  const resultParticipantSearchClear = document.querySelector("#result-participant-search-clear");
+  const resultParticipantFilters = document.querySelector("#result-participant-filters");
+  const resultParticipantFilterToggle = document.querySelector("#result-participant-filter-toggle");
+  const resultParticipantAgeFilter = document.querySelector("#result-participant-age-filter");
   let loading = false;
   let allResults = [];
   let editingResult = null;
+  let activeResultParticipantSelect = null;
+  let resultParticipantGenderFilter = "";
 
   bindDialogClose(resultEditDialog);
+  bindDialogClose(resultParticipantPickerDialog);
 
   const genderName = (gender) => gender === "female" ? "Weiblich" : (gender === "male" ? "Männlich" : "Mixed");
+  const participantName = (person) => `${person.name} (${String(person.birth_year).slice(-2)})`;
+
+  function updateResultParticipantTrigger(select) {
+    const trigger = resultEditFields.querySelector(`[data-select-id="${select.id}"]`);
+    if (!trigger) return;
+    const person = participants.find((candidate) => candidate.id === select.value);
+    const value = trigger.querySelector(".participant-picker-value");
+    value.innerHTML = person ? `${personAvatar(person)}<span>${escapeHtml(participantName(person))}</span>` : "Auswählen …";
+    trigger.classList.toggle("selected", Boolean(person));
+  }
+
+  function renderResultParticipantAgeFilter() {
+    const selectedAgeGroup = resultParticipantAgeFilter.value;
+    const ageGroups = [...new Set(participants.map((person) => person.age_group).filter(Boolean))]
+      .sort((left, right) => left.localeCompare(right, "de", { numeric: true, sensitivity: "base" }));
+    resultParticipantAgeFilter.innerHTML = `<option value="">Alle</option>${ageGroups.map((ageGroup) => `<option value="${escapeHtml(ageGroup)}">${escapeHtml(ageGroup)}</option>`).join("")}`;
+    resultParticipantAgeFilter.value = ageGroups.includes(selectedAgeGroup) ? selectedAgeGroup : "";
+  }
+
+  function renderResultParticipantPicker() {
+    const query = resultParticipantSearch.value.trim().toLocaleLowerCase("de-DE");
+    const ageGroup = resultParticipantAgeFilter.value;
+    const assignmentSelects = [...resultEditFields.querySelectorAll(".result-participant-select")];
+    const matches = participants
+      .filter((person) => !resultParticipantGenderFilter || person.gender === resultParticipantGenderFilter)
+      .filter((person) => !ageGroup || person.age_group === ageGroup)
+      .filter((person) => !query || [person.name, person.organization, person.age_group, person.birth_year]
+        .some((value) => String(value).toLocaleLowerCase("de-DE").includes(query)))
+      .sort(compareParticipantsByOrganization);
+    resultParticipantPickerList.innerHTML = matches.map((person) => {
+      const assignedElsewhere = assignmentSelects.find((select) => select !== activeResultParticipantSelect && select.value === person.id);
+      const selectedPerson = activeResultParticipantSelect?.value === person.id;
+      return `<button class="participant-picker-option ${selectedPerson ? "selected" : ""}" type="button" data-person-id="${person.id}" role="option" aria-selected="${selectedPerson}" ${assignedElsewhere ? "disabled" : ""}><span class="participant-picker-main">${personAvatar(person)}<span class="participant-picker-copy"><strong>${escapeHtml(participantName(person))}</strong><small>${escapeHtml(person.organization)} · ${escapeHtml(person.age_group)} · ${person.gender === "male" ? "m" : "w"}</small></span></span>${assignedElsewhere ? `<small>Position ${assignmentSelects.indexOf(assignedElsewhere) + 1}</small>` : (selectedPerson ? icon("check") : icon("arrow-right"))}</button>`;
+    }).join("");
+    resultParticipantPickerEmpty.hidden = matches.length !== 0;
+  }
+
+  function openResultParticipantPicker(select) {
+    activeResultParticipantSelect = select;
+    resultParticipantSearch.value = "";
+    resultParticipantSearchClear.hidden = true;
+    resultParticipantGenderFilter = "";
+    resultParticipantAgeFilter.value = "";
+    resultParticipantFilters.hidden = true;
+    resultParticipantFilterToggle.classList.remove("active", "filtered");
+    resultParticipantFilterToggle.setAttribute("aria-expanded", "false");
+    resultParticipantFilterToggle.setAttribute("aria-label", "Filter anzeigen");
+    document.querySelectorAll("[data-result-picker-gender]").forEach((button) => {
+      const active = button.dataset.resultPickerGender === "";
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+    renderResultParticipantAgeFilter();
+    renderResultParticipantPicker();
+    showDialog(resultParticipantPickerDialog, { focusField: false });
+  }
 
   function renderSelection() {
     overviewHead.hidden = false;
@@ -1797,13 +1875,22 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
     resultEditError.textContent = "";
     resultEditForm.querySelector('button[type="submit"], button:not([type])').disabled = false;
     deleteResultButton.disabled = false;
+    const item = disciplines[result.discipline];
     const lapGroups = resultLapGroups(result);
     const displayName = result.team_members?.length
       ? "Mannschaft"
       : `${result.participant_name} (${String(result.birth_year).slice(-2)})`;
+    const selectedParticipantIds = item.team
+      ? [...(result.team_members || [])].sort((left, right) => left.position - right.position).map((member) => member.id)
+      : [result.participant_id];
+    const assignmentControl = (controlId, label, selectedId) => `<div class="field"><label for="${controlId}-picker">${label}</label><button class="participant-picker-trigger result-participant-picker-trigger" id="${controlId}-picker" type="button" data-select-id="${controlId}" aria-haspopup="dialog"><span class="participant-picker-value">Auswählen …</span>${icon("chevron-down")}</button><select class="result-participant-select" id="${controlId}" hidden tabindex="-1" aria-hidden="true"><option value="">Auswählen …</option>${participants.map((person) => `<option value="${person.id}" ${person.id === selectedId ? "selected" : ""}>${escapeHtml(person.name)}</option>`).join("")}</select></div>`;
+    const assignmentMarkup = item.team
+      ? `<fieldset class="team-assignment result-edit-team-assignment"><legend>Personen</legend>${Array.from({ length: 4 }, (_, index) => assignmentControl(`result-participant-${index + 1}`, `Position ${index + 1}`, selectedParticipantIds[index] || "")).join("")}</fieldset>`
+      : assignmentControl("result-participant", "Person", selectedParticipantIds[0] || "");
     const stoppedTime = result.segments.reduce((sum, value) => sum + (Number.isInteger(value) && value > 0 ? value : 0), 0);
     resultEditFields.innerHTML = `
       <div class="result-edit-person"><strong>${escapeHtml(displayName)}</strong><span>${escapeHtml(disciplines[result.discipline].name)}</span></div>
+      <div class="result-edit-assignment">${assignmentMarkup}</div>
       <div class="review-time-summary result-edit-times-summary">
         <div class="field"><span class="label">Gestoppt</span><div class="total-summary"><strong id="result-edit-stopped">${formatTime(stoppedTime)}</strong></div></div>
         <label class="field"><span>Offiziell</span><input id="result-edit-official" inputmode="decimal" placeholder="m:ss,00" value="${result.official_centiseconds == null ? "" : formatTime(result.official_centiseconds)}"></label>
@@ -1818,6 +1905,11 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
         </div>`;
       }).join("")}</div>
       <label class="field result-edit-note-field"><span>Notiz <small>optional</small></span><textarea id="result-edit-note" maxlength="300" rows="2" placeholder="Kurzes Feedback">${escapeHtml(result.note || "")}</textarea></label>`;
+    const assignmentSelects = [...resultEditFields.querySelectorAll(".result-participant-select")];
+    assignmentSelects.forEach(updateResultParticipantTrigger);
+    resultEditFields.querySelectorAll(".result-participant-picker-trigger").forEach((trigger) => trigger.addEventListener("click", () => {
+      openResultParticipantPicker(resultEditFields.querySelector(`#${trigger.dataset.selectId}`));
+    }));
     const updateStoppedTime = () => {
       const values = [...resultEditFields.querySelectorAll(".result-edit-segment")]
         .map((input) => input.value.trim() ? parseReviewTime(input.value) : null);
@@ -1827,6 +1919,45 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
     resultEditFields.querySelectorAll(".result-edit-segment").forEach((input) => input.addEventListener("input", updateStoppedTime));
     showDialog(resultEditDialog, { focusField: false });
   }
+
+  resultParticipantSearch.addEventListener("input", () => {
+    resultParticipantSearchClear.hidden = !resultParticipantSearch.value;
+    renderResultParticipantPicker();
+  });
+  resultParticipantSearchClear.addEventListener("click", () => {
+    resultParticipantSearch.value = "";
+    resultParticipantSearchClear.hidden = true;
+    renderResultParticipantPicker();
+    resultParticipantSearch.focus();
+  });
+  resultParticipantFilterToggle.addEventListener("click", () => {
+    const expanded = resultParticipantFilters.hidden;
+    resultParticipantFilters.hidden = !expanded;
+    resultParticipantFilterToggle.classList.toggle("active", expanded);
+    resultParticipantFilterToggle.setAttribute("aria-expanded", String(expanded));
+    resultParticipantFilterToggle.setAttribute("aria-label", expanded ? "Filter ausblenden" : "Filter anzeigen");
+  });
+  resultParticipantAgeFilter.addEventListener("change", () => {
+    resultParticipantFilterToggle.classList.toggle("filtered", Boolean(resultParticipantGenderFilter || resultParticipantAgeFilter.value));
+    renderResultParticipantPicker();
+  });
+  document.querySelectorAll("[data-result-picker-gender]").forEach((button) => button.addEventListener("click", () => {
+    resultParticipantGenderFilter = button.dataset.resultPickerGender;
+    document.querySelectorAll("[data-result-picker-gender]").forEach((candidate) => {
+      const active = candidate === button;
+      candidate.classList.toggle("active", active);
+      candidate.setAttribute("aria-pressed", String(active));
+    });
+    resultParticipantFilterToggle.classList.toggle("filtered", Boolean(resultParticipantGenderFilter || resultParticipantAgeFilter.value));
+    renderResultParticipantPicker();
+  }));
+  resultParticipantPickerList.addEventListener("click", (clickEvent) => {
+    const choice = clickEvent.target.closest("[data-person-id]");
+    if (!choice || !activeResultParticipantSelect) return;
+    activeResultParticipantSelect.value = choice.dataset.personId;
+    updateResultParticipantTrigger(activeResultParticipantSelect);
+    resultParticipantPickerDialog.close();
+  });
 
   resultEditForm.addEventListener("submit", async (submitEvent) => {
     submitEvent.preventDefault();
@@ -1839,6 +1970,17 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
     const officialText = resultEditFields.querySelector("#result-edit-official").value.trim();
     const officialTime = officialText ? parseTime(officialText) : null;
     const note = resultEditFields.querySelector("#result-edit-note").value.trim();
+    const assignmentSelects = [...resultEditFields.querySelectorAll(".result-participant-select")];
+    const participantIds = assignmentSelects.map((select) => select.value);
+    const item = disciplines[editingResult.discipline];
+    if (participantIds.some((participantId) => !participantId)) {
+      resultEditError.textContent = item.team ? "Bitte alle vier Positionen besetzen." : "Bitte eine Person auswählen.";
+      return;
+    }
+    if (item.team && new Set(participantIds).size !== participantIds.length) {
+      resultEditError.textContent = "Jede Person darf nur eine Position besetzen.";
+      return;
+    }
     if (segments.some((value, index) => segmentInputs[index].value.trim() && !Number.isInteger(value))) {
       resultEditError.textContent = "Lap-Zeiten bitte als Sekunden eingeben, zum Beispiel 32,45.";
       return;
@@ -1858,9 +2000,10 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
     try {
       submitButton.disabled = true;
       resultEditError.textContent = "";
+      const assignment = item.team ? { participantIds } : { participantId: participantIds[0] };
       await api(`/events/${id}/results/${editingResult.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ segments, frequencies, lapGroups: resultLapGroups(editingResult), officialTime, note }),
+        body: JSON.stringify({ ...assignment, segments, frequencies, lapGroups: resultLapGroups(editingResult), officialTime, note }),
       });
       resultEditDialog.close();
       editingResult = null;
