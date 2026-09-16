@@ -118,6 +118,25 @@ function compareParticipantsByOrganization(left, right) {
   return organizationOrder || String(left?.name || "").localeCompare(String(right?.name || ""), "de", options);
 }
 
+function mixedTeamRequiredGender(selects, activeSelect, participants) {
+  const selectedGenders = selects
+    .filter((select) => select !== activeSelect && select.value)
+    .map((select) => participants.find((person) => person.id === select.value)?.gender)
+    .filter(Boolean);
+  const femaleCount = selectedGenders.filter((gender) => gender === "female").length;
+  const maleCount = selectedGenders.filter((gender) => gender === "male").length;
+  if (femaleCount >= 2) return "male";
+  if (maleCount >= 2) return "female";
+  return "";
+}
+
+function hasValidMixedTeam(participantIds, participants) {
+  const femaleCount = participantIds
+    .map((participantId) => participants.find((person) => person.id === participantId)?.gender)
+    .filter((gender) => gender === "female").length;
+  return participantIds.length === 4 && femaleCount === 2;
+}
+
 function personAvatar(person) {
   const initials = personInitials(person?.name);
   const capUrl = organizationCapUrl(person?.organization);
@@ -1413,14 +1432,20 @@ async function renderTimer(id) {
       activeParticipantSelect = select;
       participantSearch.value = "";
       participantSearchClear.hidden = true;
-      participantGenderFilter = "";
+      const requiredGender = item.mixed
+        ? mixedTeamRequiredGender(participantSelects, select, participants)
+        : "";
+      participantGenderFilter = requiredGender;
       participantAgeFilter.value = "";
       participantFilters.hidden = true;
-      participantFilterToggle.classList.remove("active", "filtered");
+      participantFilterToggle.classList.remove("active");
+      participantFilterToggle.classList.toggle("filtered", Boolean(requiredGender));
       participantFilterToggle.setAttribute("aria-expanded", "false");
       participantFilterToggle.setAttribute("aria-label", "Filter anzeigen");
       review.querySelectorAll("[data-picker-gender]").forEach((button) => {
-        const active = button.dataset.pickerGender === "";
+        const gender = button.dataset.pickerGender;
+        const active = gender === requiredGender;
+        button.disabled = Boolean(requiredGender && gender !== requiredGender);
         button.classList.toggle("active", active);
         button.setAttribute("aria-pressed", String(active));
       });
@@ -1610,6 +1635,7 @@ async function renderTimer(id) {
       renderParticipantPicker();
     });
     review.querySelectorAll("[data-picker-gender]").forEach((button) => button.addEventListener("click", () => {
+      if (button.disabled) return;
       participantGenderFilter = button.dataset.pickerGender;
       review.querySelectorAll("[data-picker-gender]").forEach((candidate) => {
         const active = candidate === button;
@@ -1692,9 +1718,11 @@ async function renderTimer(id) {
       const participantIds = participantSelects.map((select) => select.value);
       const missingAssignment = participantIds.some((participantId) => !participantId);
       const duplicateAssignment = item.team && new Set(participantIds).size !== participantIds.length;
-      if (!corrections || missingAssignment || duplicateAssignment) {
+      const invalidMixedAssignment = item.mixed && !hasValidMixedTeam(participantIds, participants);
+      if (!corrections || missingAssignment || duplicateAssignment || invalidMixedAssignment) {
         if (missingAssignment) review.querySelector("#save-error").textContent = item.team ? "Bitte alle vier Positionen besetzen." : "Bitte eine Person auswählen.";
         else if (duplicateAssignment) review.querySelector("#save-error").textContent = "Jede Person darf nur eine Position besetzen.";
+        else if (invalidMixedAssignment) review.querySelector("#save-error").textContent = "Eine Mixed-Staffel benötigt zwei Frauen und zwei Männer.";
         return;
       }
       try {
@@ -1912,14 +1940,21 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
     activeResultParticipantSelect = select;
     resultParticipantSearch.value = "";
     resultParticipantSearchClear.hidden = true;
-    resultParticipantGenderFilter = "";
+    const assignmentSelects = [...resultEditFields.querySelectorAll(".result-participant-select")];
+    const requiredGender = disciplines[editingResult?.discipline]?.mixed
+      ? mixedTeamRequiredGender(assignmentSelects, select, participants)
+      : "";
+    resultParticipantGenderFilter = requiredGender;
     resultParticipantAgeFilter.value = "";
     resultParticipantFilters.hidden = true;
-    resultParticipantFilterToggle.classList.remove("active", "filtered");
+    resultParticipantFilterToggle.classList.remove("active");
+    resultParticipantFilterToggle.classList.toggle("filtered", Boolean(requiredGender));
     resultParticipantFilterToggle.setAttribute("aria-expanded", "false");
     resultParticipantFilterToggle.setAttribute("aria-label", "Filter anzeigen");
     document.querySelectorAll("[data-result-picker-gender]").forEach((button) => {
-      const active = button.dataset.resultPickerGender === "";
+      const gender = button.dataset.resultPickerGender;
+      const active = gender === requiredGender;
+      button.disabled = Boolean(requiredGender && gender !== requiredGender);
       button.classList.toggle("active", active);
       button.setAttribute("aria-pressed", String(active));
     });
@@ -2107,6 +2142,7 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
     renderResultParticipantPicker();
   });
   document.querySelectorAll("[data-result-picker-gender]").forEach((button) => button.addEventListener("click", () => {
+    if (button.disabled) return;
     resultParticipantGenderFilter = button.dataset.resultPickerGender;
     document.querySelectorAll("[data-result-picker-gender]").forEach((candidate) => {
       const active = candidate === button;
@@ -2145,6 +2181,10 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
     }
     if (item.team && new Set(participantIds).size !== participantIds.length) {
       resultEditError.textContent = "Jede Person darf nur eine Position besetzen.";
+      return;
+    }
+    if (item.mixed && !hasValidMixedTeam(participantIds, participants)) {
+      resultEditError.textContent = "Eine Mixed-Staffel benötigt zwei Frauen und zwei Männer.";
       return;
     }
     if (segments.some((value, index) => segmentInputs[index].value.trim() && !Number.isInteger(value))) {

@@ -1,10 +1,10 @@
-const staticCache = "lifesaving-timer-static-v2";
+const staticCache = "lifesaving-timer-static-v3";
 const eventCache = "lifesaving-timer-events-v1";
 const appShell = [
   "/",
   "/index.html",
-  "/styles.css?v=app-icon-brand",
-  "/app.js?v=app-icon-brand",
+  "/styles.css?v=team-gender-rules",
+  "/app.js?v=team-gender-rules",
   "/icons.svg?v=participant-import",
   "/app-icon-64.png",
   "/app-icon-180.png",

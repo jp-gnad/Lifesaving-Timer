@@ -10,7 +10,7 @@ const DISCIPLINES = Object.freeze({
   rescueTubeRelay4x50: { laps: 4, team: true },
   rescueRelay4x50: { laps: 4, team: true },
   obstacleRelay4x50: { laps: 4, team: true },
-  mixedRelay4x50: { laps: 4, team: true },
+  mixedRelay4x50: { laps: 4, team: true, mixed: true },
   lineThrow: { laps: 2, team: true },
 });
 
@@ -364,15 +364,23 @@ async function handleApi(request, env) {
     if (!Array.isArray(participantIds) || participantIds.some((id) => typeof id !== "string" || !id)) throw new Error("Personenzuordnung fehlt.");
     if (discipline.team && (participantIds.length !== 4 || new Set(participantIds).size !== 4)) throw new Error("Eine Mannschaft benötigt vier unterschiedliche Personen.");
     const placeholders = participantIds.map(() => "?").join(",");
-    const { results: assignedParticipants } = await env.DB.prepare(`SELECT id FROM participants WHERE event_id = ? AND id IN (${placeholders})`)
+    const { results: assignedParticipants } = await env.DB.prepare(`SELECT id, gender FROM participants WHERE event_id = ? AND id IN (${placeholders})`)
       .bind(eventId, ...participantIds).all();
     if (assignedParticipants.length !== participantIds.length) throw new Error("Mindestens eine Person gehört nicht zu diesem Event.");
+    const genderByParticipant = new Map(assignedParticipants.map((participant) => [participant.id, participant.gender]));
+    if (discipline.mixed) {
+      const femaleCount = participantIds.filter((participantId) => genderByParticipant.get(participantId) === "female").length;
+      if (femaleCount !== 2) throw new Error("Eine Mixed-Staffel benötigt zwei Frauen und zwei Männer.");
+    }
+    const primaryParticipantId = discipline.team && !discipline.mixed
+      ? (participantIds.find((participantId) => genderByParticipant.get(participantId) === "male") || participantIds[0])
+      : participantIds[0];
     const { segments, lapGroups, frequencies, segmentTotal, officialTime } = validatedResultTiming(body, discipline);
     const id = crypto.randomUUID();
     const resultInsert = env.DB.prepare(`
       INSERT INTO results (id, event_id, participant_id, discipline, total_centiseconds, official_centiseconds, segments_json, frequencies_json, lap_groups_json, submission_key, note)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(id, eventId, participantIds[0], body.discipline, segmentTotal, officialTime, JSON.stringify(segments), JSON.stringify(frequencies), JSON.stringify(lapGroups), submissionKey, note);
+    `).bind(id, eventId, primaryParticipantId, body.discipline, segmentTotal, officialTime, JSON.stringify(segments), JSON.stringify(frequencies), JSON.stringify(lapGroups), submissionKey, note);
     if (discipline.team) {
       await env.DB.batch([resultInsert, ...participantIds.map((participantId, index) => env.DB.prepare(`
         INSERT INTO result_members (result_id, participant_id, position) VALUES (?, ?, ?)
@@ -411,15 +419,23 @@ async function handleApi(request, env) {
     }
     const participantPlaceholders = participantIds.map(() => "?").join(",");
     const { results: assignedParticipants } = await env.DB.prepare(`
-      SELECT id FROM participants WHERE event_id = ? AND id IN (${participantPlaceholders})
+      SELECT id, gender FROM participants WHERE event_id = ? AND id IN (${participantPlaceholders})
     `).bind(eventId, ...participantIds).all();
     if (assignedParticipants.length !== participantIds.length) throw new Error("Mindestens eine Person gehört nicht zu diesem Event.");
+    const genderByParticipant = new Map(assignedParticipants.map((participant) => [participant.id, participant.gender]));
+    if (discipline.mixed) {
+      const femaleCount = participantIds.filter((participantId) => genderByParticipant.get(participantId) === "female").length;
+      if (femaleCount !== 2) throw new Error("Eine Mixed-Staffel benötigt zwei Frauen und zwei Männer.");
+    }
+    const primaryParticipantId = discipline.team && !discipline.mixed
+      ? (participantIds.find((participantId) => genderByParticipant.get(participantId) === "male") || participantIds[0])
+      : participantIds[0];
     const { segments, lapGroups, frequencies, segmentTotal, officialTime } = validatedResultTiming(body, discipline);
     const resultUpdate = env.DB.prepare(`
       UPDATE results
       SET participant_id = ?, total_centiseconds = ?, official_centiseconds = ?, segments_json = ?, frequencies_json = ?, lap_groups_json = ?, note = ?
       WHERE id = ? AND event_id = ?
-    `).bind(participantIds[0], segmentTotal, officialTime, JSON.stringify(segments), JSON.stringify(frequencies), JSON.stringify(lapGroups), note, parts[4], eventId);
+    `).bind(primaryParticipantId, segmentTotal, officialTime, JSON.stringify(segments), JSON.stringify(frequencies), JSON.stringify(lapGroups), note, parts[4], eventId);
     if (discipline.team) {
       await env.DB.batch([
         resultUpdate,
