@@ -132,7 +132,7 @@ function eventIconMarkup(event, modifier = "") {
   const filename = `${name} - ${year}`;
   const pngUrl = `${eventAssetBase}${encodeURIComponent(`${filename}.png`)}`;
   const jpgUrl = `${eventAssetBase}${encodeURIComponent(`${filename}.jpg`)}`;
-  return `<span class="event-icon ${modifier}" hidden><img src="${pngUrl}" data-fallback-src="${jpgUrl}" alt="" loading="lazy" decoding="async"></span>`;
+  return `<span class="event-icon ${modifier}" hidden><img src="${pngUrl}" data-fallback-src="${jpgUrl}" alt="" loading="eager" decoding="async"></span>`;
 }
 
 document.addEventListener("load", (event) => {
