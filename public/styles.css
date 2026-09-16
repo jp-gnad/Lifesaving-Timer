@@ -240,6 +240,8 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 .time-mode-toggle button { min-height: 32px; border: 0; border-radius: 6px; padding: 4px 5px; background: transparent; color: var(--muted); font-size: 10.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .time-mode-toggle button.active { background: var(--surface); color: var(--primary-dark); box-shadow: 0 1px 3px rgba(23, 32, 51, .12); }
 .edit-mode-toggle.active { border-color: #8eb9f3; background: #edf6ff; color: var(--primary-dark); }
+.review-summary > .edit-mode-toggle { width: 100%; min-height: 44px; margin: 0 0 22px; font-weight: 600; }
+.review-editor { min-height: 0; }
 .glue-mode-toggle.active { border-color: #d5a11e; background: #fff9e8; color: #856404; }
 .glue-hint { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 10px; border-radius: 8px; padding: 8px 10px; background: #fff9e8; color: #725712; font-size: 12px; }
 .glue-hint .button { flex: 0 0 auto; min-height: 34px; padding: 5px 8px; }
@@ -364,6 +366,7 @@ body.timer-page.review-active { position: fixed; inset: 0; width: 100%; height: 
 .timer-page .review-content input, .timer-page .review-content select { min-width: 0; min-height: 40px; padding: 7px 9px; text-overflow: ellipsis; }
 .timer-page .edit-times { gap: 6px 8px; margin-bottom: 19px; }
 .timer-page .total-summary { min-height: 40px; border: 0; border-radius: 8px; padding: 6px 9px; background: var(--surface-alt); font-size: 12px; }
+.timer-page .stopped-time-field .total-summary { justify-content: flex-start; }
 .timer-page .total-summary strong { font-size: 17px; font-weight: 650; }
 .timer-page .official-time-field { margin: 0; }
 .timer-page .team-assignment { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 10px; }

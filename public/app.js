@@ -602,16 +602,20 @@ async function renderTimer(id) {
     review.classList.toggle("normal-review", item.flexible);
     review.hidden = false;
     setDocumentTitle(`Ergebnis prüfen – ${event.name}`);
-    review.innerHTML = `<div class="review-topbar"><button class="button secondary icon-button" id="close-review" aria-label="Zurück zum Timer">${icon("arrow-left")}</button><h1>Ergebnis prüfen</h1><button class="button danger icon-button" id="discard-review" aria-label="Messung löschen" title="Messung löschen">${icon("trash")}</button></div>
+    review.innerHTML = `<div class="review-topbar"><button class="button secondary icon-button" id="close-review" aria-label="Zurück">${icon("arrow-left")}</button><h1 id="review-title">Ergebnis prüfen</h1><button class="button danger icon-button" id="discard-review" aria-label="Messung löschen" title="Messung löschen">${icon("trash")}</button></div>
       <div class="review-content">
-      <div class="review-tools"><div class="time-mode-toggle" role="group" aria-label="Zeitdarstellung"><button type="button" class="active" data-time-mode="segment" aria-pressed="true">Sekunden</button><button type="button" data-time-mode="cumulative" aria-pressed="false">Kumuliert</button></div><div class="review-mode-actions"><button class="button secondary small edit-mode-toggle" id="edit-mode" type="button" aria-pressed="false">${icon("pencil")} Bearbeiten</button><button class="button secondary small glue-mode-toggle" id="glue-mode" type="button" aria-pressed="false">${icon("link")} Kleben</button></div></div>
-      <div class="glue-hint" id="glue-hint" hidden><span>Verbinde benachbarte Lap-Bereiche über das Kettensymbol.</span><button class="button secondary small" id="undo-glue" type="button" hidden>${icon("undo")} Rückgängig</button></div>
-      <div class="edit-times" id="edit-times"></div>
-      <div class="review-time-summary"><div class="field official-time-field"><label for="official-time">Offizielle Zeit</label><input id="official-time" inputmode="decimal" placeholder="0:00,00" value="${timer.officialTime === null ? "" : formatTime(timer.officialTime)}" aria-describedby="save-error"></div>
-      <div class="total-summary"><span>Gestoppt</span><strong id="save-total" aria-live="polite">${formatTime(capturedTotal())}</strong></div></div>
+      <section class="review-summary" id="review-summary">
+      <div class="review-time-summary"><div class="field stopped-time-field"><label>Gestoppte Zeit</label><div class="total-summary"><strong id="save-total" aria-live="polite">${formatTime(capturedTotal())}</strong></div></div>
+      <div class="field official-time-field"><label for="official-time">Offizielle Zeit</label><input id="official-time" inputmode="decimal" placeholder="0:00,00" value="${timer.officialTime === null ? "" : formatTime(timer.officialTime)}" aria-describedby="save-error"></div></div>
+      <button class="button secondary edit-mode-toggle" id="edit-mode" type="button">${icon("pencil")} Runden bearbeiten</button>
       ${item.team ? `${assignmentMarkup}<button class="button secondary add-review-person" id="new-review-person" type="button">${icon("user-plus")} Neue Person</button>` : `<div class="review-assignment-row">${assignmentMarkup}<button class="button secondary add-review-person" id="new-review-person" type="button">${icon("user-plus")} Neu</button></div>`}
-      <p class="form-error" id="save-error" role="alert"></p>
-      <div class="form-actions save-actions"><button class="button" id="save-result" ${participants.length >= (item.team ? 4 : 1) ? "" : "disabled"}>${icon("save")} Ergebnis speichern</button></div></div>
+      <div class="form-actions save-actions"><button class="button" id="save-result" ${participants.length >= (item.team ? 4 : 1) ? "" : "disabled"}>${icon("save")} Ergebnis speichern</button></div></section>
+      <section class="review-editor" id="review-editor" hidden>
+        <div class="review-tools"><div class="time-mode-toggle" role="group" aria-label="Zeitdarstellung"><button type="button" class="active" data-time-mode="segment" aria-pressed="true">Sekunden</button><button type="button" data-time-mode="cumulative" aria-pressed="false">Kumuliert</button></div><div class="review-mode-actions"><button class="button secondary small glue-mode-toggle" id="glue-mode" type="button" aria-pressed="false">${icon("link")} Kleben</button><button class="button secondary small" id="finish-edit" type="button">${icon("check")} Fertig</button></div></div>
+        <div class="glue-hint" id="glue-hint" hidden><span>Benachbarte Runden über das Kettensymbol verbinden.</span><button class="button secondary small" id="undo-glue" type="button" hidden>${icon("undo")} Rückgängig</button></div>
+        <div class="edit-times" id="edit-times"></div>
+      </section>
+      <p class="form-error" id="save-error" role="alert"></p></div>
       <dialog id="review-person-dialog"><form class="dialog-body" id="review-person-form">
         <div class="dialog-title-row"><h2>Neue Person</h2><button type="button" class="button secondary icon-button" data-close aria-label="Schließen">${icon("x")}</button></div>
         <div class="form-grid">
@@ -631,6 +635,9 @@ async function renderTimer(id) {
     const saveResult = review.querySelector("#save-result");
     const personDialog = review.querySelector("#review-person-dialog");
     const personForm = review.querySelector("#review-person-form");
+    const reviewSummary = review.querySelector("#review-summary");
+    const reviewEditor = review.querySelector("#review-editor");
+    const reviewTitle = review.querySelector("#review-title");
 
     function syncLapGroupsFromInputs() {
       const timeInputs = [...editTimes.querySelectorAll(".segment-input")];
@@ -729,12 +736,22 @@ async function renderTimer(id) {
     const editModeButton = review.querySelector("#edit-mode");
     const glueModeButton = review.querySelector("#glue-mode");
     function updateReviewModes() {
-      editModeButton.classList.toggle("active", editMode);
-      editModeButton.setAttribute("aria-pressed", String(editMode));
       glueModeButton.classList.toggle("active", glueMode);
       glueModeButton.setAttribute("aria-pressed", String(glueMode));
       review.querySelector("#glue-hint").hidden = !glueMode;
       renderLapFields();
+    }
+    function setEditMode(active) {
+      if (editMode) syncLapGroupsFromInputs();
+      editMode = active;
+      if (!editMode) glueMode = false;
+      reviewSummary.hidden = editMode;
+      reviewEditor.hidden = !editMode;
+      reviewTitle.textContent = editMode ? "Runden bearbeiten" : "Ergebnis prüfen";
+      setDocumentTitle(`${editMode ? "Runden bearbeiten" : "Ergebnis prüfen"} – ${event.name}`);
+      updateReviewModes();
+      readCorrections(false);
+      if (editMode) editTimes.querySelector(".segment-input")?.focus();
     }
     review.querySelectorAll("[data-time-mode]").forEach((button) => button.addEventListener("click", () => {
       if (button.dataset.timeMode === timeMode) return;
@@ -748,17 +765,11 @@ async function renderTimer(id) {
       renderLapFields();
       readCorrections(false);
     }));
-    editModeButton.addEventListener("click", () => {
-      syncLapGroupsFromInputs();
-      editMode = !editMode;
-      if (editMode) glueMode = false;
-      updateReviewModes();
-      if (editMode) editTimes.querySelector(".segment-input")?.focus();
-    });
+    editModeButton.addEventListener("click", () => setEditMode(true));
+    review.querySelector("#finish-edit").addEventListener("click", () => setEditMode(false));
     glueModeButton.addEventListener("click", () => {
       syncLapGroupsFromInputs();
       glueMode = !glueMode;
-      if (glueMode) editMode = false;
       updateReviewModes();
     });
     review.querySelector("#undo-glue").addEventListener("click", () => {
@@ -804,7 +815,7 @@ async function renderTimer(id) {
         submitButton.disabled = false;
       }
     });
-    review.querySelector("#close-review").addEventListener("click", () => {
+    function closeReview() {
       const corrections = readCorrections(false);
       if (corrections) {
         timer.segments = corrections.segments;
@@ -820,6 +831,13 @@ async function renderTimer(id) {
       setTimerInteractionLock(true);
       setDocumentTitle(`Timer – ${event.name}`);
       renderLaps(); updateProgress();
+    }
+    review.querySelector("#close-review").addEventListener("click", () => {
+      if (editMode) {
+        setEditMode(false);
+        return;
+      }
+      closeReview();
     });
     review.querySelector("#discard-review").addEventListener("click", resetTimer);
     saveResult.addEventListener("click", async (event) => {
