@@ -338,6 +338,7 @@ async function handleApi(request, env) {
 
   if (parts[3] === "results" && parts.length === 4 && method === "POST") {
     const body = await bodyOf(request);
+    const note = cleanText(body.note, "Notiz", 300, false);
     const submissionKey = body.clientSubmissionId == null
       ? null
       : cleanText(body.clientSubmissionId, "Übertragungs-ID", 64);
@@ -369,9 +370,9 @@ async function handleApi(request, env) {
     const { segments, lapGroups, frequencies, segmentTotal, officialTime } = validatedResultTiming(body, discipline);
     const id = crypto.randomUUID();
     const resultInsert = env.DB.prepare(`
-      INSERT INTO results (id, event_id, participant_id, discipline, total_centiseconds, official_centiseconds, segments_json, frequencies_json, lap_groups_json, submission_key)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(id, eventId, participantIds[0], body.discipline, segmentTotal, officialTime, JSON.stringify(segments), JSON.stringify(frequencies), JSON.stringify(lapGroups), submissionKey);
+      INSERT INTO results (id, event_id, participant_id, discipline, total_centiseconds, official_centiseconds, segments_json, frequencies_json, lap_groups_json, submission_key, note)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(id, eventId, participantIds[0], body.discipline, segmentTotal, officialTime, JSON.stringify(segments), JSON.stringify(frequencies), JSON.stringify(lapGroups), submissionKey, note);
     if (discipline.team) {
       await env.DB.batch([resultInsert, ...participantIds.map((participantId, index) => env.DB.prepare(`
         INSERT INTO result_members (result_id, participant_id, position) VALUES (?, ?, ?)
@@ -383,17 +384,18 @@ async function handleApi(request, env) {
   }
 
   if (parts[3] === "results" && parts[4] && parts.length === 5 && method === "PATCH") {
-    const existing = await env.DB.prepare("SELECT id, discipline FROM results WHERE id = ? AND event_id = ?")
+    const existing = await env.DB.prepare("SELECT id, discipline, note FROM results WHERE id = ? AND event_id = ?")
       .bind(parts[4], eventId).first();
     if (!existing) return fail("Ergebnis nicht gefunden.", 404);
     const body = await bodyOf(request);
     const discipline = DISCIPLINES[existing.discipline];
+    const note = body.note === undefined ? existing.note : cleanText(body.note, "Notiz", 300, false);
     const { segments, lapGroups, frequencies, segmentTotal, officialTime } = validatedResultTiming(body, discipline);
     await env.DB.prepare(`
       UPDATE results
-      SET total_centiseconds = ?, official_centiseconds = ?, segments_json = ?, frequencies_json = ?, lap_groups_json = ?
+      SET total_centiseconds = ?, official_centiseconds = ?, segments_json = ?, frequencies_json = ?, lap_groups_json = ?, note = ?
       WHERE id = ? AND event_id = ?
-    `).bind(segmentTotal, officialTime, JSON.stringify(segments), JSON.stringify(frequencies), JSON.stringify(lapGroups), parts[4], eventId).run();
+    `).bind(segmentTotal, officialTime, JSON.stringify(segments), JSON.stringify(frequencies), JSON.stringify(lapGroups), note, parts[4], eventId).run();
     return json({ ok: true, totalCentiseconds: segmentTotal, officialCentiseconds: officialTime });
   }
 

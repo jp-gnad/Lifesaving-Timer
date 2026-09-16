@@ -42,6 +42,12 @@ class SchemaTest(unittest.TestCase):
         self.assertIn("official_centiseconds", columns)
         self.assertEqual(columns["official_centiseconds"][3], 0)
 
+    def test_result_note_is_optional_and_limited(self):
+        columns = {row[1]: row for row in self.db.execute("PRAGMA table_info(results)").fetchall()}
+        self.assertIn("note", columns)
+        self.assertEqual(columns["note"][3], 1)
+        self.assertEqual(columns["note"][4], "''")
+
     def test_submission_key_prevents_duplicate_offline_result(self):
         self.db.execute("INSERT INTO events (id, name) VALUES (?, ?)", ("event-1", "Testevent"))
         self.db.execute(

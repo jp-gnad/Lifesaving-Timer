@@ -539,7 +539,8 @@ function updateViewportLock() {
     || document.body.classList.contains("review-active")
     || document.body.classList.contains("home-page")
     || document.body.classList.contains("event-page")
-    || document.body.classList.contains("people-page");
+    || document.body.classList.contains("people-page")
+    || document.body.classList.contains("viewer-page");
   viewportMeta.content = locked
     ? "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     : defaultViewport;
@@ -962,6 +963,7 @@ async function renderTimer(id) {
     frequencyStartedAt: null,
     frequencyTaps: 0,
     officialTime: null,
+    note: "",
     discipline: "normal",
   };
 
@@ -1172,7 +1174,7 @@ async function renderTimer(id) {
 
   function resetTimer() {
     cancelAnimationFrame(animationFrame);
-    Object.assign(timer, { status: "idle", startedAt: 0, displayed: 0, segments: [], frequencies: [], lapGroups: [], officialTime: null });
+    Object.assign(timer, { status: "idle", startedAt: 0, displayed: 0, segments: [], frequencies: [], lapGroups: [], officialTime: null, note: "" });
     resetFrequencyCapture();
     elements.clock.textContent = "0:00,00";
     elements["clock-status"].textContent = "Bereit";
@@ -1230,6 +1232,7 @@ async function renderTimer(id) {
       <div class="review-time-summary"><div class="field stopped-time-field"><label>Gestoppte Zeit</label><div class="total-summary"><strong id="save-total" aria-live="polite">${formatTime(capturedTotal())}</strong></div></div>
       <div class="field official-time-field"><label for="official-time">Offizielle Zeit</label><input id="official-time" inputmode="decimal" enterkeyhint="done" placeholder="z. B. 123,45" value="${timer.officialTime === null ? "" : formatTime(timer.officialTime)}" aria-describedby="save-error"></div></div>
       ${item.team ? `${assignmentMarkup}<button class="button secondary add-review-person" id="new-review-person" type="button">${icon("user-plus")} Neue Person</button>` : `<div class="review-assignment-row">${assignmentMarkup}<button class="button secondary add-review-person" id="new-review-person" type="button">${icon("user-plus")} Neu</button></div>`}
+      <label class="field review-note-field" for="result-note"><span>Notiz <small>optional</small></span><textarea id="result-note" maxlength="300" rows="2" placeholder="Kurzes Feedback">${escapeHtml(timer.note)}</textarea></label>
       <p class="form-error" id="save-error" role="alert"></p>
       <div class="form-actions save-actions"><button class="button" id="save-result" ${participants.length >= (item.team ? 4 : 1) ? "" : "disabled"}>${icon("save")} Ergebnis speichern</button></div></section>
       <section class="review-editor" id="review-editor" hidden>
@@ -1262,6 +1265,7 @@ async function renderTimer(id) {
 
     const editTimes = review.querySelector("#edit-times");
     const officialInput = review.querySelector("#official-time");
+    const noteInput = review.querySelector("#result-note");
     const participantSelects = [...review.querySelectorAll(".participant-select")];
     const saveResult = review.querySelector("#save-result");
     const personDialog = review.querySelector("#review-person-dialog");
@@ -1579,6 +1583,7 @@ async function renderTimer(id) {
         timer.lapGroups = corrections.lapGroups;
         timer.displayed = corrections.segments.reduce((sum, value) => sum + (value || 0), 0);
         timer.officialTime = corrections.officialTime;
+        timer.note = noteInput.value;
         elements.clock.textContent = formatTime(timer.displayed);
       }
       review.hidden = true;
@@ -1609,7 +1614,7 @@ async function renderTimer(id) {
       try {
         event.currentTarget.disabled = true;
         const assignment = item.team ? { participantIds } : { participantId: participantIds[0] };
-        await saveResultOfflineFirst(id, { ...assignment, discipline: timer.discipline, segments: corrections.segments, frequencies: corrections.frequencies, lapGroups: corrections.lapGroups, officialTime: corrections.officialTime });
+        await saveResultOfflineFirst(id, { ...assignment, discipline: timer.discipline, segments: corrections.segments, frequencies: corrections.frequencies, lapGroups: corrections.lapGroups, officialTime: corrections.officialTime, note: noteInput.value.trim() });
         resetTimer();
       } catch (err) {
         review.querySelector("#save-error").textContent = `Ergebnis konnte nicht sicher auf diesem Gerät gespeichert werden: ${err.message}`;
@@ -1803,6 +1808,7 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
         <div class="field"><span class="label">Gestoppt</span><div class="total-summary"><strong id="result-edit-stopped">${formatTime(stoppedTime)}</strong></div></div>
         <label class="field"><span>Offiziell</span><input id="result-edit-official" inputmode="decimal" placeholder="m:ss,00" value="${result.official_centiseconds == null ? "" : formatTime(result.official_centiseconds)}"></label>
       </div>
+      <label class="field result-edit-note-field"><span>Notiz <small>optional</small></span><textarea id="result-edit-note" maxlength="300" rows="2" placeholder="Kurzes Feedback">${escapeHtml(result.note || "")}</textarea></label>
       <div class="result-edit-laps">${result.segments.map((value, index) => {
         const group = lapGroups[index] || [index + 1];
         const frequency = result.frequencies?.[index];
@@ -1832,6 +1838,7 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
     const frequencies = frequencyInputs.map((input) => input.value.trim() ? Number(input.value) : null);
     const officialText = resultEditFields.querySelector("#result-edit-official").value.trim();
     const officialTime = officialText ? parseTime(officialText) : null;
+    const note = resultEditFields.querySelector("#result-edit-note").value.trim();
     if (segments.some((value, index) => segmentInputs[index].value.trim() && !Number.isInteger(value))) {
       resultEditError.textContent = "Lap-Zeiten bitte als Sekunden eingeben, zum Beispiel 32,45.";
       return;
@@ -1853,7 +1860,7 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
       resultEditError.textContent = "";
       await api(`/events/${id}/results/${editingResult.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ segments, frequencies, lapGroups: resultLapGroups(editingResult), officialTime }),
+        body: JSON.stringify({ segments, frequencies, lapGroups: resultLapGroups(editingResult), officialTime, note }),
       });
       resultEditDialog.close();
       editingResult = null;
@@ -1906,7 +1913,7 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
         <div class="result-head"><div>${resultIdentity}${details}</div>
         <button class="button secondary small icon-button edit-result" data-id="${result.id}" aria-label="Ergebnis bearbeiten" title="Bearbeiten">${icon("pencil")}</button></div>
         <div class="result-times"><div><span>Gestoppt</span><strong>${formatTime(stoppedTime)}</strong></div><div class="official"><span>Offiziell</span><strong>${result.official_centiseconds == null ? "–" : formatTime(result.official_centiseconds)}</strong></div></div>
-        <details class="result-laps-details"><summary>Runden <span>${result.segments.length}</span></summary><div class="result-segments">${result.segments.map((value, lap) => {
+        <details class="result-laps-details"><summary>Details <span>${result.segments.length} Runden</span></summary>${result.note ? `<div class="result-feedback"><strong>Feedback</strong><p>${escapeHtml(result.note)}</p></div>` : ""}<div class="result-segments">${result.segments.map((value, lap) => {
           const group = lapGroups[lap] || [lap + 1];
           const glued = group.length > 1;
           return `<span class="${glued ? "glued-result-lap" : ""}"><span class="result-lap-label">${escapeHtml(disciplineLapGroupLabel(result.discipline, group))}${Number.isInteger(result.frequencies?.[lap]) ? `<small>${result.frequencies[lap]}/min</small>` : ""}</span><strong>${value === null ? "–" : formatTime(value)}</strong></span>`;
@@ -2019,6 +2026,7 @@ async function renderRoute() {
   document.body.classList.toggle("home-page", current.page === "home");
   document.body.classList.toggle("event-page", current.page === "event");
   document.body.classList.toggle("people-page", current.page === "people");
+  document.body.classList.toggle("viewer-page", current.page === "viewer");
   setReviewInteractionLock(false);
   setTimerInteractionLock(false);
   try {

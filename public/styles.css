@@ -37,7 +37,7 @@ body.dialog-open {
   overflow: hidden;
 }
 
-button, input, select { font: inherit; }
+button, input, select, textarea { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 
 .site-header {
@@ -156,7 +156,7 @@ body.home-page .site-header, body.event-page .site-header, body.people-page .sit
   gap: 8px;
 }
 .button:hover { background: var(--primary-dark); }
-.button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid rgba(18,99,223,.25); outline-offset: 2px; }
+.button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid rgba(18,99,223,.25); outline-offset: 2px; }
 .button.secondary { background: var(--surface); border-color: var(--line); color: var(--text); }
 .button.secondary:hover { background: var(--surface-alt); }
 .button.danger { background: var(--surface); border-color: #e8bcbc; color: var(--danger); }
@@ -171,7 +171,7 @@ form { margin: 0; }
 .field { display: grid; gap: 7px; }
 .field.full { grid-column: 1 / -1; }
 label, .label { font-size: 14px; font-weight: 700; }
-input, select {
+input, select, textarea {
   width: 100%;
   min-height: 50px;
   border: 1px solid #bec9d8;
@@ -180,6 +180,7 @@ input, select {
   background: #fff;
   color: var(--text);
 }
+textarea { resize: none; line-height: 1.35; }
 .form-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
 .form-error { min-height: 24px; margin: 12px 0 0; color: var(--danger); font-size: 14px; }
 
@@ -251,10 +252,16 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 .result-laps-details[open] summary::after { content: "−"; }
 .result-laps-details summary span { margin-left: auto; color: var(--muted); font-size: 11px; font-weight: 600; }
 .result-laps-details .result-segments { padding-top: 5px; }
+.result-feedback { margin: 4px 0 7px; border-left: 3px solid #c8d7ec; border-radius: 0 7px 7px 0; padding: 7px 9px; background: #f7f9fc; }
+.result-feedback strong { display: block; margin-bottom: 1px; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+.result-feedback p { margin: 0; color: var(--text); font-size: 12px; line-height: 1.35; white-space: pre-wrap; overflow-wrap: anywhere; }
 .results-pdf-button { width: auto; min-height: 38px; padding: 6px 13px; font-size: 13px; }
 .result-edit-person { display: grid; gap: 1px; margin-bottom: 15px; }
 .result-edit-person span { color: var(--muted); font-size: 13px; }
 .result-edit-times-summary { margin-bottom: 15px; }
+.result-edit-note-field { margin-bottom: 15px; }
+.result-edit-note-field > span small, .review-note-field > span small { color: var(--muted); font-weight: 500; }
+.result-edit-note-field textarea { min-height: 58px; }
 .result-edit-laps { display: grid; gap: 8px; }
 .result-edit-lap { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, .72fr); align-items: end; gap: 7px; border-top: 1px solid var(--line); padding-top: 8px; }
 .result-edit-lap > strong { align-self: center; min-width: 0; font-size: 12px; line-height: 1.25; }
@@ -494,11 +501,13 @@ body.timer-page.review-active { position: fixed; inset: 0; width: 100%; height: 
 .timer-page .review-view.normal-review .edit-times { flex: 1 1 auto; min-height: 0; align-content: start; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; margin-bottom: 0; padding-bottom: 12px; }
 .timer-page .review-content .field { min-width: 0; gap: 4px; }
 .timer-page .review-content input, .timer-page .review-content select { min-width: 0; min-height: 40px; padding: 7px 9px; text-overflow: ellipsis; }
+.timer-page .review-content textarea { min-width: 0; min-height: 58px; padding: 8px 9px; }
 .timer-page .edit-times { gap: 6px 8px; margin-bottom: 19px; }
 .timer-page .total-summary { min-height: 40px; border: 0; border-radius: 8px; padding: 6px 9px; background: var(--surface-alt); font-size: 12px; }
 .timer-page .stopped-time-field .total-summary { justify-content: flex-start; }
 .timer-page .total-summary strong { font-size: 17px; font-weight: 650; }
 .timer-page .official-time-field { margin: 0; }
+.timer-page .review-note-field { margin-top: 15px; }
 .timer-page .team-assignment { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 10px; }
 .timer-page .team-assignment legend { margin-bottom: 3px; }
 .timer-page .add-review-person { min-height: 40px; margin-top: 7px; }
@@ -507,7 +516,7 @@ body.timer-page.review-active { position: fixed; inset: 0; width: 100%; height: 
 .timer-page .review-summary > .save-actions { margin-top: auto; padding-top: clamp(28px, 6vh, 52px); }
 .timer-page #save-error:empty { display: none; }
 .timer-page label { color: #172033; }
-.timer-page input, .timer-page select { border-color: #d8dde7; background: #fff; color: #172033; }
+.timer-page input, .timer-page select, .timer-page textarea { border-color: #d8dde7; background: #fff; color: #172033; }
 .timer-page .total-summary { border-color: #d8dde7; color: #172033; }
 .timer-page .notice { border-color: #d5a11e; background: #fff9e8; color: #725712; }
 .timer-page dialog { background: #fff; color: #172033; }
