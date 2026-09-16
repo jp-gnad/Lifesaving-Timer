@@ -578,8 +578,8 @@ async function renderEvent(id) {
         <div class="field"><label for="edit-event-location">Ort</label><input id="edit-event-location" name="location" maxlength="120" value="${escapeHtml(event.location || "")}"></div>
       </div>
       <p class="form-error" id="event-edit-error" role="alert"></p>
-      <div class="form-actions"><button type="button" class="button secondary" data-close>Abbrechen</button><button class="button">Event speichern</button></div>
-      <div class="dialog-delete-row"><button type="button" class="button danger small" id="delete-event-dialog">${icon("trash")} Event löschen</button></div>
+      <div class="form-actions"><button type="button" class="button secondary" data-close>Abbrechen</button><button class="button">Speichern</button></div>
+      <div class="dialog-delete-row"><button type="button" class="button danger small" id="delete-event-dialog" aria-label="Event löschen">${icon("trash")} Löschen</button></div>
     </form></dialog>`;
 
   const eventDialog = document.querySelector("#event-edit-dialog");
