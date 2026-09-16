@@ -46,12 +46,21 @@ def build(source: Path) -> list[list[object]]:
     if worksheet is None:
         raise RuntimeError("No source sheet found.")
 
+    source_years = [
+        year
+        for row in worksheet.iter_rows(values_only=True)
+        if (year := event_year(row[10])) is not None
+    ]
+    if not source_years:
+        raise RuntimeError("No event year found.")
+    first_included_year = max(source_years) - 1
+
     latest: dict[tuple[str, int, str], tuple[tuple[float, int], str, str]] = {}
     for row_number, row in enumerate(worksheet.iter_rows(values_only=True), 1):
         gender = str(row[0] or "").strip().lower()
         name = display_name(row[1])
         year_of_event = event_year(row[10])
-        if gender not in {"m", "w"} or not name or year_of_event is None:
+        if gender not in {"m", "w"} or not name or year_of_event is None or year_of_event < first_included_year:
             continue
         birth_year = full_birth_year(row[11], year_of_event)
         if birth_year is None:
