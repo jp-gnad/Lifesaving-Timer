@@ -1673,7 +1673,7 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
         ${result.segments.map((value, lap) => {
           const group = lapGroups[lap] || [lap + 1];
           const span = Math.max(1, group.length);
-          return `<td colspan="${span}" class="${span > 1 ? "glued-result-cell" : ""}" aria-label="${escapeHtml(disciplineLapGroupLabel(result.discipline, group))}">${value ? `<span class="table-lap-value">${formatTime(value)}${Number.isInteger(result.frequencies?.[lap]) ? `<small>${result.frequencies[lap]}/min</small>` : ""}</span>` : "–"}</td>`;
+          return `<td colspan="${span}" class="${span > 1 ? "glued-result-cell" : ""}" aria-label="${escapeHtml(disciplineLapGroupLabel(result.discipline, group))}">${value ? `<span class="table-lap-value">${formatReviewTime(value)}${Number.isInteger(result.frequencies?.[lap]) ? `<small>${result.frequencies[lap]}/min</small>` : ""}</span>` : "–"}</td>`;
         }).join("")}${Array.from({ length: Math.max(0, lapCount - lapGroups.flat().length) }, () => "<td>–</td>").join("")}
         <td><button class="table-delete-result delete-result" data-id="${result.id}" aria-label="Ergebnis löschen">Löschen</button></td></tr>`;
       }).join("")}</tbody>
