@@ -81,16 +81,20 @@ h3 { font-size: 17px; }
 .event-summary { margin: 5px 0 0; color: var(--muted); font-size: 14px; line-height: 1.35; }
 .event-page .event-summary { margin-top: 8px; }
 .event-page .event-page-head { margin-bottom: 38px; }
-body.event-page, body.people-page { height: 100dvh; overflow: hidden; overscroll-behavior: none; }
-body.event-page .site-header, body.people-page .site-header { height: calc(58px + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); }
-.event-page .container, .people-page .container { height: calc(100dvh - 58px - env(safe-area-inset-top)); min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+body.home-page, body.event-page, body.people-page { height: 100dvh; overflow: hidden; overscroll-behavior: none; }
+body.home-page .site-header, body.event-page .site-header, body.people-page .site-header { height: calc(58px + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); }
+.home-page .container, .event-page .container, .people-page .container { height: calc(100dvh - 58px - env(safe-area-inset-top)); min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+.home-page .container > .page-head { flex: 0 0 auto; }
+.home-page .event-list-section { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
 .event-page .container > .back, .event-page .event-page-head, .event-page .event-action-grid { flex: 0 0 auto; }
 .event-page .event-action-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .event-page .event-action-tile:first-child { grid-column: 1 / -1; min-height: 138px; aspect-ratio: auto; }
 .people-page .container > .back, .people-page .people-page-head { flex: 0 0 auto; }
 .people-page .people-page-head { margin-bottom: 12px; }
 .people-list-section { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
-.people-page .person-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+.person-groups { flex: 1 1 auto; min-height: 0; display: grid; align-content: start; gap: 18px; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+.person-age-group h2 { margin: 0 0 7px; color: var(--muted); font-size: 14px; font-weight: 750; }
+.people-page .person-list { min-height: 0; align-content: start; grid-auto-rows: max-content; }
 .back { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; margin-bottom: 10px; overflow: hidden; color: var(--primary-dark); font-size: 14px; font-weight: 650; line-height: 1.25; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
 .back:hover { text-decoration: underline; }
 .icon { width: 1.15em; height: 1.15em; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
@@ -382,6 +386,16 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 .toast { position: fixed; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); left: 12px; max-width: 656px; margin: 0 auto; padding: 12px 16px; border-radius: 8px; background: #172033; color: #fff; opacity: 0; pointer-events: none; }
 .toast.show { opacity: 1; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.portrait-lock { display: none; }
+
+@media (orientation: landscape) and (max-height: 600px) and (pointer: coarse) {
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body > .site-header, body > .container, body > .toast { display: none !important; }
+  .portrait-lock { position: fixed; inset: 0; z-index: 10000; padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left)); background: #f7f9fc; color: #172033; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; }
+  .portrait-lock svg { width: 54px; height: 54px; margin-bottom: 5px; fill: none; stroke: #1263df; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+  .portrait-lock strong { font-size: 20px; }
+  .portrait-lock span { color: #657187; font-size: 14px; }
+}
 
 /* Helle, iOS-inspirierte Stoppuhransicht */
 body.timer-page { background: #f7f9fc; color: #172033; }
@@ -464,8 +478,8 @@ body.timer-page.review-active { position: fixed; inset: 0; width: 100%; height: 
 @media (max-width: 430px) {
   .site-header { height: 52px; }
   .container { padding-top: 12px; }
-  body.event-page .site-header, body.people-page .site-header { height: calc(52px + env(safe-area-inset-top)); }
-  .event-page .container, .people-page .container { height: calc(100dvh - 52px - env(safe-area-inset-top)); }
+  body.home-page .site-header, body.event-page .site-header, body.people-page .site-header { height: calc(52px + env(safe-area-inset-top)); }
+  .home-page .container, .event-page .container, .people-page .container { height: calc(100dvh - 52px - env(safe-area-inset-top)); }
   h1 { font-size: 24px; }
   .page-head { margin-bottom: 10px; }
   .back { margin-bottom: 7px; font-size: 13px; }

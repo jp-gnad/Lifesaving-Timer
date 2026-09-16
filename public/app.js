@@ -222,6 +222,7 @@ function setDocumentTitle(title) {
 function updateViewportLock() {
   const locked = document.body.classList.contains("timer-locked")
     || document.body.classList.contains("review-active")
+    || document.body.classList.contains("home-page")
     || document.body.classList.contains("event-page")
     || document.body.classList.contains("people-page");
   viewportMeta.content = locked
@@ -247,10 +248,18 @@ function renderError(error, back = "#/", backText = "Zurück zur Übersicht") {
   document.querySelector("#retry").addEventListener("click", renderRoute);
 }
 
-function openDialog(id) {
+function openDialog(id, { focusField = true } = {}) {
   const dialog = document.querySelector(id);
+  if (focusField) {
+    dialog.removeAttribute("autofocus");
+    dialog.removeAttribute("tabindex");
+  } else {
+    dialog.setAttribute("autofocus", "");
+    dialog.tabIndex = -1;
+  }
   dialog.showModal();
-  dialog.querySelector("input, select")?.focus();
+  if (focusField) dialog.querySelector("input, select")?.focus();
+  else dialog.focus({ preventScroll: true });
 }
 
 function bindDialogClose(dialog) {
@@ -372,16 +381,22 @@ async function renderEvent(id) {
 async function renderPeople(id) {
   const { event, participants } = await api(`/events/${id}`);
   participants.sort(compareParticipantsByOrganization);
+  const personCardMarkup = (person) => `<button class="person-card person-card-button edit-person" type="button" data-id="${person.id}" aria-label="${escapeHtml(person.name)} bearbeiten">
+    <div class="person-card-content">${personAvatar(person)}<div class="person-card-copy"><div class="person-head"><strong>${escapeHtml(person.name)} (${String(person.birth_year).slice(-2)})</strong></div>
+    <div class="person-details"><span>${escapeHtml(person.organization)} - ${escapeHtml(person.age_group)} - ${person.gender === "male" ? "m" : "w"}</span></div></div></div>
+  </button>`;
+  const peopleByAgeGroup = [...participants.reduce((groups, person) => {
+    const ageGroup = person.age_group || "Ohne Altersklasse";
+    if (!groups.has(ageGroup)) groups.set(ageGroup, []);
+    groups.get(ageGroup).push(person);
+    return groups;
+  }, new Map()).entries()].sort(([left], [right]) => left.localeCompare(right, "de", { numeric: true, sensitivity: "base" }));
   setDocumentTitle(`Personen – ${event.name}`);
   app.innerHTML = `
     <a class="back" href="#/event/${id}">${icon("arrow-left")} ${escapeHtml(event.name)}</a>
     <div class="page-head people-page-head"><h1>Personen</h1><button class="button secondary" id="new-person">${icon("user-plus")} Hinzufügen</button></div>
     <section class="people-list-section" aria-label="Personenliste">
-      ${participants.length ? `<div class="person-list">
-        ${participants.map((person) => `<button class="person-card person-card-button edit-person" type="button" data-id="${person.id}" aria-label="${escapeHtml(person.name)} bearbeiten">
-          <div class="person-card-content">${personAvatar(person)}<div class="person-card-copy"><div class="person-head"><strong>${escapeHtml(person.name)} (${String(person.birth_year).slice(-2)})</strong></div>
-          <div class="person-details"><span>${escapeHtml(person.organization)} - ${escapeHtml(person.age_group)} - ${person.gender === "male" ? "m" : "w"}</span></div></div></div>
-        </button>`).join("")}</div>` : `<div class="empty">Noch keine Personen.</div>`}
+      ${participants.length ? `<div class="person-groups">${peopleByAgeGroup.map(([ageGroup, people], groupIndex) => `<section class="person-age-group" aria-labelledby="age-group-${groupIndex}"><h2 id="age-group-${groupIndex}">${escapeHtml(ageGroup)}</h2><div class="person-list">${people.map(personCardMarkup).join("")}</div></section>`).join("")}</div>` : `<div class="empty">Noch keine Personen.</div>`}
     </section>
     <dialog id="person-dialog"><form class="dialog-body" id="person-form">
       <h2 id="person-dialog-title">Person hinzufügen</h2><div class="form-grid">
@@ -420,7 +435,7 @@ async function renderPeople(id) {
     personForm.elements.gender.value = person.gender;
     personForm.elements.organization.value = person.organization;
     document.querySelector("#person-error").textContent = "";
-    openDialog("#person-dialog");
+    openDialog("#person-dialog", { focusField: false });
   }));
   personForm.addEventListener("submit", async (submitEvent) => {
     submitEvent.preventDefault();
@@ -1380,6 +1395,7 @@ async function renderRoute() {
   app.innerHTML = `<div class="loading">Wird geladen …</div>`;
   const current = route();
   document.body.classList.toggle("timer-page", current.page === "timer");
+  document.body.classList.toggle("home-page", current.page === "home");
   document.body.classList.toggle("event-page", current.page === "event");
   document.body.classList.toggle("people-page", current.page === "people");
   setReviewInteractionLock(false);
