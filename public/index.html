@@ -10,8 +10,8 @@
     <title>Lifesaving Timer</title>
     <link rel="icon" href="/icon.svg" type="image/svg+xml">
     <link rel="manifest" href="/manifest.webmanifest">
-    <link rel="stylesheet" href="/styles.css?v=dialog-focus-lock">
-    <script type="module" src="/app.js?v=dialog-focus-lock"></script>
+    <link rel="stylesheet" href="/styles.css?v=event-keyboard-fix">
+    <script type="module" src="/app.js?v=event-keyboard-fix"></script>
   </head>
   <body>
     <header class="site-header">
@@ -23,6 +23,10 @@
     <main id="app" class="container" tabindex="-1">
       <div class="loading">Wird geladen …</div>
     </main>
+    <button id="offline-sync-status" class="offline-sync-status" type="button" aria-live="polite" hidden>
+      <span class="offline-sync-dot" aria-hidden="true"></span>
+      <span id="offline-sync-text">Ergebnis wartet</span>
+    </button>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <div class="portrait-lock" role="alert" aria-live="assertive">
       <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="20" y="8" width="24" height="44" rx="5"></rect><path d="M28 14h8M30 46h4M13 28a20 20 0 0 1 7-14m-7 14-5-5m5 5 5-5"></path></svg>

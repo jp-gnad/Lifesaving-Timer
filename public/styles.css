@@ -401,14 +401,18 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
 .notice { border-left: 3px solid #d5a11e; background: #fff9e8; padding: 12px 15px; color: #725712; font-size: 14px; }
 .loading { padding: 70px 0; color: var(--muted); text-align: center; }
-.toast { position: fixed; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); left: 12px; max-width: 656px; margin: 0 auto; padding: 12px 16px; border-radius: 8px; background: #172033; color: #fff; opacity: 0; pointer-events: none; }
+.toast { position: fixed; z-index: 9100; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); left: 12px; max-width: 656px; margin: 0 auto; padding: 12px 16px; border-radius: 8px; background: #172033; color: #fff; opacity: 0; pointer-events: none; }
 .toast.show { opacity: 1; }
+.offline-sync-status { position: fixed; z-index: 9000; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); left: 12px; width: max-content; min-height: 36px; max-width: calc(100vw - 24px); margin: 0 auto; border: 1px solid #d8dde7; border-radius: 18px; padding: 7px 12px; background: #fff; color: #475467; box-shadow: 0 2px 8px rgba(23, 32, 51, .12); display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-size: 12px; font-weight: 650; white-space: nowrap; cursor: pointer; }
+.offline-sync-status[hidden] { display: none; }
+.offline-sync-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: #d59b0b; }
+.offline-sync-status.has-error .offline-sync-dot { background: #d92d20; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 .portrait-lock { display: none; }
 
 @media (orientation: landscape) and (max-height: 600px) and (pointer: coarse) {
   html, body { width: 100%; height: 100%; overflow: hidden; }
-  body > .site-header, body > .container, body > .toast { display: none !important; }
+  body > .site-header, body > .container, body > .toast, body > .offline-sync-status { display: none !important; }
   .portrait-lock { position: fixed; inset: 0; z-index: 10000; padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left)); background: #f7f9fc; color: #172033; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; }
   .portrait-lock svg { width: 54px; height: 54px; margin-bottom: 5px; fill: none; stroke: #1263df; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
   .portrait-lock strong { font-size: 20px; }

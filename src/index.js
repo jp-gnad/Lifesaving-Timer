@@ -303,6 +303,25 @@ async function handleApi(request, env) {
 
   if (parts[3] === "results" && parts.length === 4 && method === "POST") {
     const body = await bodyOf(request);
+    const submissionKey = body.clientSubmissionId == null
+      ? null
+      : cleanText(body.clientSubmissionId, "Übertragungs-ID", 64);
+    if (submissionKey && !/^[A-Za-z0-9-]{8,64}$/.test(submissionKey)) throw new Error("Ungültige Übertragungs-ID.");
+    if (submissionKey) {
+      const existing = await env.DB.prepare(`
+        SELECT id, total_centiseconds, official_centiseconds
+        FROM results
+        WHERE event_id = ? AND submission_key = ?
+      `).bind(eventId, submissionKey).first();
+      if (existing) {
+        return json({
+          id: existing.id,
+          totalCentiseconds: existing.total_centiseconds,
+          officialCentiseconds: existing.official_centiseconds,
+          alreadySaved: true,
+        });
+      }
+    }
     if (!(body.discipline in DISCIPLINES)) throw new Error("Ungültige Disziplin.");
     const discipline = DISCIPLINES[body.discipline];
     const participantIds = discipline.team ? body.participantIds : [body.participantId];
@@ -345,9 +364,9 @@ async function handleApi(request, env) {
     if (officialTime !== null && officialTime > 86_400_000) throw new Error("Zeit ist zu lang.");
     const id = crypto.randomUUID();
     const resultInsert = env.DB.prepare(`
-      INSERT INTO results (id, event_id, participant_id, discipline, total_centiseconds, official_centiseconds, segments_json, frequencies_json, lap_groups_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(id, eventId, participantIds[0], body.discipline, segmentTotal, officialTime, JSON.stringify(segments), JSON.stringify(frequencies), JSON.stringify(lapGroups));
+      INSERT INTO results (id, event_id, participant_id, discipline, total_centiseconds, official_centiseconds, segments_json, frequencies_json, lap_groups_json, submission_key)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(id, eventId, participantIds[0], body.discipline, segmentTotal, officialTime, JSON.stringify(segments), JSON.stringify(frequencies), JSON.stringify(lapGroups), submissionKey);
     if (discipline.team) {
       await env.DB.batch([resultInsert, ...participantIds.map((participantId, index) => env.DB.prepare(`
         INSERT INTO result_members (result_id, participant_id, position) VALUES (?, ?, ?)

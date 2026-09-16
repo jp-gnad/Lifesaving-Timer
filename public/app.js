@@ -1,7 +1,13 @@
 const app = document.querySelector("#app");
 const toast = document.querySelector("#toast");
+const offlineSyncStatus = document.querySelector("#offline-sync-status");
+const offlineSyncText = document.querySelector("#offline-sync-text");
 const viewportMeta = document.querySelector('meta[name="viewport"]');
 const defaultViewport = viewportMeta.content;
+
+const offlineDatabaseName = "lifesaving-timer-offline";
+const offlineDatabaseVersion = 1;
+const pendingResultsStore = "pendingResults";
 
 const disciplines = {
   normal: { name: "Normal", laps: 20, flexible: true, group: "normal" },
@@ -63,6 +69,8 @@ let toastTimer = null;
 let dialogScrollPosition = null;
 let dialogReleaseFrame = null;
 let dialogRestoreTimer = null;
+let offlineDatabasePromise = null;
+let offlineSyncPromise = null;
 
 function icon(name) {
   return `<svg class="icon" aria-hidden="true"><use href="/icons.svg?v=participant-import#${name}"></use></svg>`;
@@ -132,13 +140,163 @@ function showToast(message) {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(`/api${path}`, {
-    ...options,
-    headers: options.body ? { "content-type": "application/json", ...options.headers } : options.headers,
-  });
+  let response;
+  try {
+    response = await fetch(`/api${path}`, {
+      ...options,
+      headers: options.body ? { "content-type": "application/json", ...options.headers } : options.headers,
+    });
+  } catch (cause) {
+    const error = new Error("Keine Internetverbindung.");
+    error.isNetworkError = true;
+    error.cause = cause;
+    throw error;
+  }
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || "Die Anfrage ist fehlgeschlagen.");
+  if (!response.ok) {
+    const error = new Error(data.error || "Die Anfrage ist fehlgeschlagen.");
+    error.status = response.status;
+    throw error;
+  }
   return data;
+}
+
+function openOfflineDatabase() {
+  if (!window.indexedDB) return Promise.reject(new Error("Der Offline-Speicher ist auf diesem Gerät nicht verfügbar."));
+  if (offlineDatabasePromise) return offlineDatabasePromise;
+  offlineDatabasePromise = new Promise((resolve, reject) => {
+    const request = indexedDB.open(offlineDatabaseName, offlineDatabaseVersion);
+    request.addEventListener("upgradeneeded", () => {
+      if (!request.result.objectStoreNames.contains(pendingResultsStore)) {
+        request.result.createObjectStore(pendingResultsStore, { keyPath: "clientSubmissionId" });
+      }
+    });
+    request.addEventListener("success", () => resolve(request.result));
+    request.addEventListener("error", () => reject(request.error || new Error("Offline-Speicher konnte nicht geöffnet werden.")));
+  });
+  offlineDatabasePromise.catch(() => { offlineDatabasePromise = null; });
+  return offlineDatabasePromise;
+}
+
+async function usePendingResultsStore(mode, operation) {
+  const database = await openOfflineDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(pendingResultsStore, mode);
+    const store = transaction.objectStore(pendingResultsStore);
+    let request;
+    try {
+      request = operation(store);
+    } catch (error) {
+      reject(error);
+      return;
+    }
+    request.addEventListener("success", () => resolve(request.result));
+    request.addEventListener("error", () => reject(request.error || new Error("Offline-Speicher konnte nicht gelesen werden.")));
+    transaction.addEventListener("abort", () => reject(transaction.error || new Error("Offline-Speicher konnte nicht aktualisiert werden.")));
+  });
+}
+
+function getPendingResults() {
+  return usePendingResultsStore("readonly", (store) => store.getAll());
+}
+
+function getPendingResult(clientSubmissionId) {
+  return usePendingResultsStore("readonly", (store) => store.get(clientSubmissionId));
+}
+
+function putPendingResult(record) {
+  return usePendingResultsStore("readwrite", (store) => store.put(record));
+}
+
+function deletePendingResult(clientSubmissionId) {
+  return usePendingResultsStore("readwrite", (store) => store.delete(clientSubmissionId));
+}
+
+async function updateOfflineSyncStatus() {
+  if (!offlineSyncStatus || !offlineSyncText) return;
+  try {
+    const pending = await getPendingResults();
+    offlineSyncStatus.hidden = pending.length === 0;
+    offlineSyncStatus.classList.toggle("has-error", pending.some((record) => record.blocked));
+    if (!pending.length) return;
+    if (offlineSyncPromise) {
+      offlineSyncText.textContent = `${pending.length} ${pending.length === 1 ? "Ergebnis" : "Ergebnisse"} wird synchronisiert …`;
+    } else if (pending.some((record) => record.blocked)) {
+      offlineSyncText.textContent = `${pending.length} ${pending.length === 1 ? "Ergebnis wartet" : "Ergebnisse warten"} · Erneut versuchen`;
+    } else {
+      offlineSyncText.textContent = `${pending.length} ${pending.length === 1 ? "Ergebnis wartet" : "Ergebnisse warten"}`;
+    }
+  } catch {
+    offlineSyncStatus.hidden = true;
+  }
+}
+
+function isRetryableSyncError(error) {
+  return error?.isNetworkError || error?.status === 408 || error?.status === 429 || Number(error?.status) >= 500;
+}
+
+async function uploadPendingResult(record) {
+  try {
+    await api(`/events/${record.eventId}/results`, {
+      method: "POST",
+      body: JSON.stringify(record.payload),
+    });
+    await deletePendingResult(record.clientSubmissionId);
+    return { success: true, retryable: false };
+  } catch (error) {
+    const retryable = isRetryableSyncError(error);
+    await putPendingResult({
+      ...record,
+      attempts: (record.attempts || 0) + 1,
+      lastAttemptAt: new Date().toISOString(),
+      lastError: error.message,
+      blocked: !retryable,
+    });
+    return { success: false, retryable };
+  }
+}
+
+async function syncPendingResults({ includeBlocked = false, notify = false } = {}) {
+  if (offlineSyncPromise) return offlineSyncPromise;
+  offlineSyncPromise = (async () => {
+    const pending = (await getPendingResults())
+      .filter((record) => includeBlocked || !record.blocked)
+      .sort((left, right) => String(left.createdAt).localeCompare(String(right.createdAt)));
+    await updateOfflineSyncStatus();
+    let synced = 0;
+    for (const record of pending) {
+      if (!navigator.onLine) break;
+      const outcome = await uploadPendingResult(record);
+      if (outcome.success) synced += 1;
+      else if (outcome.retryable) break;
+    }
+    if (notify && synced) showToast(`${synced} ${synced === 1 ? "Ergebnis wurde" : "Ergebnisse wurden"} synchronisiert.`);
+    return synced;
+  })();
+  try {
+    return await offlineSyncPromise;
+  } finally {
+    offlineSyncPromise = null;
+    await updateOfflineSyncStatus();
+  }
+}
+
+async function saveResultOfflineFirst(eventId, payload) {
+  const clientSubmissionId = crypto.randomUUID();
+  const record = {
+    clientSubmissionId,
+    eventId,
+    payload: { ...payload, clientSubmissionId },
+    createdAt: new Date().toISOString(),
+    attempts: 0,
+    blocked: false,
+  };
+  await putPendingResult(record);
+  await updateOfflineSyncStatus();
+  if (!navigator.onLine) return false;
+  await syncPendingResults();
+  if (await getPendingResult(clientSubmissionId)) await syncPendingResults();
+  return !(await getPendingResult(clientSubmissionId));
 }
 
 function route() {
@@ -278,10 +436,14 @@ function releaseDialogBackground() {
       document.documentElement.scrollTop = position.y;
       document.body.scrollTop = position.y;
     };
-    restorePosition();
-    dialogRestoreTimer = setTimeout(() => {
-      if (!dialogScrollPosition) restorePosition();
-    }, 400);
+    let restoreAttempts = 0;
+    const restoreAfterKeyboard = () => {
+      if (dialogScrollPosition) return;
+      restorePosition();
+      restoreAttempts += 1;
+      if (restoreAttempts < 10) dialogRestoreTimer = setTimeout(restoreAfterKeyboard, 160);
+    };
+    restoreAfterKeyboard();
   });
 }
 
@@ -303,10 +465,39 @@ function openDialog(id, options = {}) {
   showDialog(document.querySelector(id), options);
 }
 
+function bindKeyboardStableEventDialog(dialog) {
+  const restoreLockedPosition = () => {
+    if (!dialog.open || !dialogScrollPosition) return;
+    window.scrollTo(dialogScrollPosition.x, dialogScrollPosition.y);
+    document.documentElement.scrollTop = dialogScrollPosition.y;
+    document.body.scrollTop = dialogScrollPosition.y;
+  };
+  dialog.addEventListener("pointerdown", (event) => {
+    const input = event.target.closest('input:not([type]), input[type="text"]');
+    if (!input || document.activeElement === input) return;
+    event.preventDefault();
+    input.focus({ preventScroll: true });
+    if (typeof input.setSelectionRange === "function") {
+      const end = input.value.length;
+      input.setSelectionRange(end, end);
+    }
+    restoreLockedPosition();
+  });
+  dialog.addEventListener("focusin", () => {
+    restoreLockedPosition();
+    setTimeout(restoreLockedPosition, 80);
+    setTimeout(restoreLockedPosition, 240);
+  });
+}
+
 function bindDialogClose(dialog) {
-  dialog.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => dialog.close()));
+  const close = () => {
+    if (dialog.contains(document.activeElement)) document.activeElement.blur();
+    dialog.close();
+  };
+  dialog.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", close));
   dialog.addEventListener("click", (event) => {
-    if (event.target === dialog) dialog.close();
+    if (event.target === dialog) close();
   });
   dialog.addEventListener("close", releaseDialogBackground);
 }
@@ -346,7 +537,8 @@ async function renderHome() {
 
   const dialog = document.querySelector("#event-dialog");
   bindDialogClose(dialog);
-  document.querySelector("#new-event").addEventListener("click", () => openDialog("#event-dialog"));
+  bindKeyboardStableEventDialog(dialog);
+  document.querySelector("#new-event").addEventListener("click", () => openDialog("#event-dialog", { focusField: false }));
   document.querySelector("#event-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const submit = event.submitter;
@@ -393,9 +585,10 @@ async function renderEvent(id) {
   const eventDialog = document.querySelector("#event-edit-dialog");
   const eventForm = document.querySelector("#event-edit-form");
   bindDialogClose(eventDialog);
+  bindKeyboardStableEventDialog(eventDialog);
   document.querySelector("#edit-event").addEventListener("click", () => {
     document.querySelector("#event-edit-error").textContent = "";
-    openDialog("#event-edit-dialog");
+    openDialog("#event-edit-dialog", { focusField: false });
   });
   eventForm.addEventListener("submit", async (submitEvent) => {
     submitEvent.preventDefault();
@@ -1242,11 +1435,13 @@ async function renderTimer(id) {
       try {
         event.currentTarget.disabled = true;
         const assignment = item.team ? { participantIds } : { participantId: participantIds[0] };
-        await api(`/events/${id}/results`, { method: "POST", body: JSON.stringify({ ...assignment, discipline: timer.discipline, segments: corrections.segments, frequencies: corrections.frequencies, lapGroups: corrections.lapGroups, officialTime: corrections.officialTime }) });
-        showToast("Ergebnis wurde gespeichert. Bereit für die nächste Person.");
+        const synced = await saveResultOfflineFirst(id, { ...assignment, discipline: timer.discipline, segments: corrections.segments, frequencies: corrections.frequencies, lapGroups: corrections.lapGroups, officialTime: corrections.officialTime });
+        showToast(synced
+          ? "Ergebnis wurde gespeichert. Bereit für die nächste Person."
+          : "Offline gespeichert. Wird bei Verbindung automatisch hochgeladen.");
         resetTimer();
       } catch (err) {
-        review.querySelector("#save-error").textContent = err.message;
+        review.querySelector("#save-error").textContent = `Ergebnis konnte nicht sicher auf diesem Gerät gespeichert werden: ${err.message}`;
         event.currentTarget.disabled = false;
       }
     });
@@ -1547,4 +1742,15 @@ async function renderRoute() {
 }
 
 window.addEventListener("hashchange", renderRoute);
+window.addEventListener("online", () => syncPendingResults().catch(() => {}));
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") syncPendingResults().catch(() => {});
+});
+offlineSyncStatus?.addEventListener("click", () => syncPendingResults({ includeBlocked: true, notify: true }).catch(() => {}));
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+}
+updateOfflineSyncStatus()
+  .then(() => syncPendingResults())
+  .catch(() => {});
 renderRoute();

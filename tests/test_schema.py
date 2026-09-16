@@ -42,6 +42,29 @@ class SchemaTest(unittest.TestCase):
         self.assertIn("official_centiseconds", columns)
         self.assertEqual(columns["official_centiseconds"][3], 0)
 
+    def test_submission_key_prevents_duplicate_offline_result(self):
+        self.db.execute("INSERT INTO events (id, name) VALUES (?, ?)", ("event-1", "Testevent"))
+        self.db.execute(
+            """INSERT INTO participants
+               (id, event_id, name, birth_year, age_group, gender, organization)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            ("person-1", "event-1", "Erika Muster", 2008, "17/18", "female", "Teststadt"),
+        )
+        values = ("event-1", "person-1", "rescue50", 6400, "[3100,3300]", "offline-result-1")
+        self.db.execute(
+            """INSERT INTO results
+               (id, event_id, participant_id, discipline, total_centiseconds, segments_json, submission_key)
+               VALUES ('result-1', ?, ?, ?, ?, ?, ?)""",
+            values,
+        )
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.execute(
+                """INSERT INTO results
+                   (id, event_id, participant_id, discipline, total_centiseconds, segments_json, submission_key)
+                   VALUES ('result-2', ?, ?, ?, ?, ?, ?)""",
+                values,
+            )
+
     def test_glued_adjacent_laps_can_be_saved(self):
         self.db.execute("INSERT INTO events (id, name) VALUES (?, ?)", ("event-1", "Testevent"))
         self.db.execute(
