@@ -403,7 +403,7 @@ function setReviewInteractionLock(locked) {
 
 function renderError(error, back = "#/", backText = "Zurück zur Übersicht") {
   app.innerHTML = `
-    <a class="back" href="${back}">${icon("arrow-left")} ${backText}</a>
+    <a class="back" href="${back}" data-history-back>${icon("arrow-left")} ${backText}</a>
     <div class="card"><h1>Fehler</h1><p class="lead">${escapeHtml(error.message)}</p>
     <button class="button secondary" id="retry">${icon("refresh")} Erneut versuchen</button></div>`;
   document.querySelector("#retry").addEventListener("click", renderRoute);
@@ -561,7 +561,7 @@ async function renderEvent(id) {
   const { event, participants } = await api(`/events/${id}`);
   setDocumentTitle(event.name);
   app.innerHTML = `
-    <a class="back" href="#/">${icon("arrow-left")} Events</a>
+    <a class="back" href="#/" data-history-back>${icon("arrow-left")} Events</a>
     <div class="page-head event-page-head"><div><div class="event-title-row"><h1>${escapeHtml(event.name)}</h1><button class="button secondary icon-button" id="edit-event" type="button" aria-label="Event bearbeiten" title="Event bearbeiten">${icon("pencil")}</button></div>
       <p class="event-summary">${escapeHtml(dateText(event.event_date))} · ${event.location ? escapeHtml(event.location) : "Kein Ort"} · ${participants.length} Personen</p></div>
     </div>
@@ -634,7 +634,7 @@ async function renderPeople(id) {
   }, new Map()).entries()].sort(([left], [right]) => left.localeCompare(right, "de", { numeric: true, sensitivity: "base" }));
   setDocumentTitle(`Personen – ${event.name}`);
   app.innerHTML = `
-    <a class="back" href="#/event/${id}">${icon("arrow-left")} ${escapeHtml(event.name)}</a>
+    <a class="back" href="#/event/${id}" data-history-back>${icon("arrow-left")} ${escapeHtml(event.name)}</a>
     <div class="page-head people-page-head"><h1>Personen</h1><div class="people-page-actions">
       <button class="button secondary" id="new-person">${icon("user-plus")} Neu</button>
       <button class="button secondary" id="import-person">${icon("import")} Importieren</button>
@@ -815,7 +815,7 @@ async function renderTimer(id) {
     <div class="timer-shell">
       <div id="timer-view">
       <div class="timer-topbar">
-        <a class="button secondary icon-button" href="#/event/${id}" aria-label="Zurück zu ${escapeHtml(event.name)}">${icon("arrow-left")}</a>
+        <a class="button secondary icon-button" href="#/event/${id}" data-history-back aria-label="Eine Ansicht zurück">${icon("arrow-left")}</a>
         <button class="mode-button" id="mode-button" aria-haspopup="dialog"><span><strong id="mode-name">Normal</strong><small id="mode-laps">max. 20 Laps</small></span>${icon("chevron-down")}</button>
       </div>
       <section class="card clock-card" aria-label="Stoppuhr">
@@ -1548,7 +1548,7 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
   setDocumentTitle(`Ergebnisse – ${event.name}`);
   app.innerHTML = `
     <div id="viewer-overview-head" ${selected ? "hidden" : ""}>
-    <a class="back" href="#/event/${id}">${icon("arrow-left")} ${escapeHtml(event.name)}</a>
+    <a class="back" href="#/event/${id}" data-history-back>${icon("arrow-left")} ${escapeHtml(event.name)}</a>
     <div class="page-head viewer-page-head"><h1>Ergebnisse</h1>
       <div class="viewer-refresh"><div class="live-note"><span class="live-dot"></span><span id="live-status">Live · jede Minute</span></div>
       <button class="button secondary viewer-refresh-button" id="refresh-results">${icon("refresh")} Aktualisieren</button></div></div></div>
@@ -1659,7 +1659,7 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
         <td><button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis ${index + 1} löschen" title="Löschen">${icon("trash")}</button></td></tr>`;
       }).join("")}</tbody>
     </table></div>`;
-    resultsRoot.innerHTML = `<a class="viewer-list-back" id="viewer-list-back" href="#/viewer/${id}">${icon("arrow-left")} Ergebnisse</a>
+    resultsRoot.innerHTML = `<a class="viewer-list-back" id="viewer-list-back" href="#/viewer/${id}" data-history-back>${icon("arrow-left")} Ergebnisse</a>
       <div class="viewer-list-heading"><div class="viewer-list-title"><p class="eyebrow">${genderName(selected.gender)}</p><h2>${escapeHtml(item.name)}</h2></div>
         <div class="result-view-toggle" role="group" aria-label="Darstellung"><button data-result-view="cards" class="${resultView === "cards" ? "active" : ""}" aria-pressed="${resultView === "cards"}">${icon("cards")} Karten</button><button data-result-view="table" class="${resultView === "table" ? "active" : ""}" aria-pressed="${resultView === "table"}">${icon("table")} Tabelle</button></div></div>
       ${results.length ? (resultView === "table" ? tableView : cardView) : `<div class="empty">Noch keine Ergebnisse.</div>`}`;
@@ -1748,6 +1748,13 @@ async function renderRoute() {
   }
 }
 
+document.addEventListener("click", (event) => {
+  const backLink = event.target.closest("[data-history-back]");
+  if (!backLink) return;
+  event.preventDefault();
+  if (history.length > 1) history.back();
+  else location.href = backLink.href;
+});
 window.addEventListener("hashchange", renderRoute);
 window.addEventListener("online", () => syncPendingResults({ includeBlocked: true }).catch(() => {}));
 document.addEventListener("visibilitychange", () => {
