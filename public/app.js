@@ -25,6 +25,37 @@ const disciplineGroups = [
   { id: "team", name: "Mannschaft" },
 ];
 
+const organizationCaps = [
+  ["Cap-Bad Windsheim.svg", ["Bad Windsheim"]],
+  ["Cap-Baden.svg", ["Baden", "Landesverband Baden", "LV Baden"]],
+  ["Cap-Bermatingen-Markdorf.svg", ["Bermatingen-Markdorf", "Bermatingen", "Markdorf"]],
+  ["Cap-Bietigheim-Bissingen.svg", ["Bietigheim-Bissingen", "Bietigheim", "Bissingen"]],
+  ["Cap-Bühl-Bühlertal.svg", ["Bühl-Bühlertal", "Bühl", "Bühlertal"]],
+  ["Cap-Ditzingen.svg", ["Ditzingen"]],
+  ["Cap-Duisburg-Homberg.svg", ["Duisburg-Homberg", "Homberg"]],
+  ["Cap-Durlach.svg", ["Durlach"]],
+  ["Cap-Ettlingen.svg", ["Ettlingen"]],
+  ["Cap-Halle-Saale.svg", ["Halle-Saale", "Halle (Saale)"]],
+  ["Cap-Herzogenaurach.svg", ["Herzogenaurach"]],
+  ["Cap-Ingolstadt.svg", ["Ingolstadt"]],
+  ["Cap-Karlsruhe.svg", ["Karlsruhe"]],
+  ["Cap-Kelkheim.svg", ["Kelkheim"]],
+  ["Cap-Luckenwalde.svg", ["Luckenwalde"]],
+  ["Cap-Malsch.svg", ["Malsch"]],
+  ["Cap-Neckargemünd.svg", ["Neckargemünd"]],
+  ["Cap-Neustadt an der Weinstraße.svg", ["Neustadt an der Weinstraße"]],
+  ["Cap-Nieder-OlmWörrstadt.svg", ["Nieder-Olm/Wörrstadt", "Nieder-Olm Wörrstadt"]],
+  ["Cap-Pankow.svg", ["Pankow"]],
+  ["Cap-Rheinböllen.svg", ["Rheinböllen"]],
+  ["Cap-Schwerte.svg", ["Schwerte"]],
+  ["Cap-Wadgassen.svg", ["Wadgassen"]],
+  ["Cap-Waghäusel.svg", ["Waghäusel"]],
+  ["Cap-Weil am Rhein.svg", ["Weil am Rhein"]],
+  ["Cap-Wettersbach.svg", ["Wettersbach"]],
+];
+
+const capAssetBase = "https://raw.githubusercontent.com/jp-gnad/Lifesaving_Baden/main/web/assets/svg/";
+
 let refreshTimer = null;
 let cooldownTimer = null;
 let animationFrame = null;
@@ -39,6 +70,50 @@ function escapeHtml(value = "") {
     "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;",
   })[char]);
 }
+
+function normalizedIdentity(value = "") {
+  return String(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ß/g, "ss")
+    .toLocaleLowerCase("de-DE")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function organizationCapUrl(organization = "") {
+  const normalizedOrganization = normalizedIdentity(organization);
+  if (!normalizedOrganization) return null;
+  const match = organizationCaps.find(([, aliases]) => aliases.some((alias) => {
+    const normalizedAlias = normalizedIdentity(alias);
+    return normalizedOrganization.includes(normalizedAlias)
+      || (normalizedOrganization.length >= 4 && normalizedAlias.includes(normalizedOrganization));
+  }));
+  return match ? `${capAssetBase}${encodeURIComponent(match[0])}` : null;
+}
+
+function personInitials(name = "") {
+  return String(name).trim().split(/[\s-]+/).filter(Boolean).map((part) => {
+    const initial = Array.from(part)[0] || "";
+    return part === part.toLocaleLowerCase("de-DE")
+      ? initial.toLocaleLowerCase("de-DE")
+      : initial.toLocaleUpperCase("de-DE");
+  }).join("") || "?";
+}
+
+function personAvatar(person) {
+  const initials = personInitials(person?.name);
+  const capUrl = organizationCapUrl(person?.organization);
+  const genderClass = person?.gender === "female" ? "female" : "male";
+  return `<span class="person-avatar ${genderClass} ${initials.length > 3 ? "long" : ""} ${capUrl ? "has-cap" : ""}" aria-hidden="true"><span>${escapeHtml(initials)}</span>${capUrl ? `<img src="${capUrl}" alt="" loading="lazy" decoding="async">` : ""}</span>`;
+}
+
+document.addEventListener("error", (event) => {
+  if (!(event.target instanceof HTMLImageElement)) return;
+  const avatar = event.target.closest(".person-avatar");
+  if (!avatar) return;
+  event.target.remove();
+  avatar.classList.remove("has-cap");
+}, true);
 
 function showToast(message) {
   toast.textContent = message;
@@ -244,8 +319,8 @@ async function renderEvent(id) {
       <div class="section-head"><h2 id="people-heading">Personen</h2><button class="button secondary" id="new-person">${icon("user-plus")} Hinzufügen</button></div>
       ${participants.length ? `<div class="person-list">
         ${participants.map((person) => `<button class="person-card person-card-button edit-person" type="button" data-id="${person.id}" aria-label="${escapeHtml(person.name)} bearbeiten">
-          <div class="person-head"><strong>${escapeHtml(person.name)} (${String(person.birth_year).slice(-2)})</strong></div>
-          <div class="person-details"><span>${escapeHtml(person.organization)} - ${escapeHtml(person.age_group)} - ${person.gender === "male" ? "m" : "w"}</span></div>
+          <div class="person-card-content">${personAvatar(person)}<div class="person-card-copy"><div class="person-head"><strong>${escapeHtml(person.name)} (${String(person.birth_year).slice(-2)})</strong></div>
+          <div class="person-details"><span>${escapeHtml(person.organization)} - ${escapeHtml(person.age_group)} - ${person.gender === "male" ? "m" : "w"}</span></div></div></div>
         </button>`).join("")}</div>` : `<div class="empty">Noch keine Personen.</div>`}
     </section>
     <dialog id="event-edit-dialog"><form class="dialog-body" id="event-edit-form">
@@ -607,7 +682,7 @@ async function renderTimer(id) {
     let glueMode = false;
     const glueHistory = [];
     const optionMarkup = () => participants.map((person) => `<option value="${person.id}">${escapeHtml(person.name)}</option>`).join("");
-    const assignmentControl = (id, label) => `<div class="field"><label for="${id}-picker">${label}</label><button class="participant-picker-trigger" id="${id}-picker" type="button" data-select-id="${id}" aria-haspopup="dialog"><span>Auswählen …</span>${icon("chevron-down")}</button><select class="participant-select" id="${id}" hidden tabindex="-1" aria-hidden="true"><option value="">Auswählen …</option>${optionMarkup()}</select></div>`;
+    const assignmentControl = (id, label) => `<div class="field"><label for="${id}-picker">${label}</label><button class="participant-picker-trigger" id="${id}-picker" type="button" data-select-id="${id}" aria-haspopup="dialog"><span class="participant-picker-value">Auswählen …</span>${icon("chevron-down")}</button><select class="participant-select" id="${id}" hidden tabindex="-1" aria-hidden="true"><option value="">Auswählen …</option>${optionMarkup()}</select></div>`;
     const assignmentMarkup = item.team
       ? `<fieldset class="team-assignment"><legend>Mannschaft</legend>${Array.from({ length: 4 }, (_, index) => assignmentControl(`participant-${index + 1}`, `Position ${index + 1}`)).join("")}</fieldset>`
       : assignmentControl("participant", "Person");
@@ -683,7 +758,8 @@ async function renderTimer(id) {
       const trigger = participantPickerTriggers.find((button) => button.dataset.selectId === select.id);
       if (!trigger) return;
       const person = participants.find((candidate) => candidate.id === select.value);
-      trigger.querySelector("span").textContent = person ? participantName(person) : "Auswählen …";
+      const value = trigger.querySelector(".participant-picker-value");
+      value.innerHTML = person ? `${personAvatar(person)}<span>${escapeHtml(participantName(person))}</span>` : "Auswählen …";
       trigger.classList.toggle("selected", Boolean(person));
     }
 
@@ -707,7 +783,7 @@ async function renderTimer(id) {
       participantPickerList.innerHTML = matches.map((person) => {
         const assignedElsewhere = participantSelects.find((select) => select !== activeParticipantSelect && select.value === person.id);
         const selected = activeParticipantSelect?.value === person.id;
-        return `<button class="participant-picker-option ${selected ? "selected" : ""}" type="button" data-person-id="${person.id}" role="option" aria-selected="${selected}" ${assignedElsewhere ? "disabled" : ""}><span><strong>${escapeHtml(participantName(person))}</strong><small>${escapeHtml(person.organization)} · ${escapeHtml(person.age_group)} · ${person.gender === "male" ? "m" : "w"}</small></span>${assignedElsewhere ? `<small>Position ${participantSelects.indexOf(assignedElsewhere) + 1}</small>` : (selected ? icon("check") : icon("arrow-right"))}</button>`;
+        return `<button class="participant-picker-option ${selected ? "selected" : ""}" type="button" data-person-id="${person.id}" role="option" aria-selected="${selected}" ${assignedElsewhere ? "disabled" : ""}><span class="participant-picker-main">${personAvatar(person)}<span class="participant-picker-copy"><strong>${escapeHtml(participantName(person))}</strong><small>${escapeHtml(person.organization)} · ${escapeHtml(person.age_group)} · ${person.gender === "male" ? "m" : "w"}</small></span></span>${assignedElsewhere ? `<small>Position ${participantSelects.indexOf(assignedElsewhere) + 1}</small>` : (selected ? icon("check") : icon("arrow-right"))}</button>`;
       }).join("");
       participantPickerEmpty.hidden = matches.length !== 0;
     }
@@ -1175,12 +1251,16 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
         const teamMembers = result.team_members || [];
         const lapGroups = resultLapGroups(result);
         const displayName = teamMembers.length ? "Mannschaft" : `${result.participant_name} (${String(result.birth_year).slice(-2)})`;
+        const resultPerson = { name: result.participant_name, gender: result.gender, organization: result.organization };
+        const resultIdentity = teamMembers.length
+          ? `<strong>${displayName}</strong>`
+          : `<div class="result-person-identity">${personAvatar(resultPerson)}<strong>${escapeHtml(displayName)}</strong></div>`;
         const details = teamMembers.length
-          ? `<div class="result-team-members">${teamMembers.map((member) => `<span>${member.position}. ${escapeHtml(member.name)} (${String(member.birth_year).slice(-2)})</span>`).join("")}</div>`
+          ? `<div class="result-team-members">${teamMembers.map((member) => `<span class="result-team-member">${personAvatar(member)}<span>${member.position}. ${escapeHtml(member.name)} (${String(member.birth_year).slice(-2)})</span></span>`).join("")}</div>`
           : `<div class="result-meta">${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}</div>`;
         const stoppedTime = result.segments.reduce((sum, value) => sum + (Number.isInteger(value) && value > 0 ? value : 0), 0);
         return `<article class="result-card">
-        <div class="result-head"><span class="rank-badge">${index + 1}</span><div><strong>${escapeHtml(displayName)}</strong>${details}</div>
+        <div class="result-head"><span class="rank-badge">${index + 1}</span><div>${resultIdentity}${details}</div>
         <button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis ${index + 1} löschen" title="Löschen">${icon("trash")}</button></div>
         <div class="result-times"><div><span>Gestoppt</span><strong>${formatTime(stoppedTime)}</strong></div><div class="official"><span>Offiziell</span><strong>${result.official_centiseconds == null ? "–" : formatTime(result.official_centiseconds)}</strong></div></div>
         <div class="result-segments">${result.segments.map((value, lap) => {
@@ -1197,8 +1277,14 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
         const teamMembers = result.team_members || [];
         const lapGroups = resultLapGroups(result);
         const displayName = teamMembers.length ? "Mannschaft" : `${result.participant_name} (${String(result.birth_year).slice(-2)})`;
-        const details = teamMembers.length ? teamMembers.map((member) => `${member.position}. ${escapeHtml(member.name)} (${String(member.birth_year).slice(-2)})`).join("<br>") : `${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}`;
-        return `<tr><td><strong>${index + 1}. ${escapeHtml(displayName)}</strong><small>${details}</small></td>
+        const resultPerson = { name: result.participant_name, gender: result.gender, organization: result.organization };
+        const tableIdentity = teamMembers.length
+          ? `<strong>${index + 1}. Mannschaft</strong>`
+          : `<span class="table-person-identity">${personAvatar(resultPerson)}<strong>${index + 1}. ${escapeHtml(displayName)}</strong></span>`;
+        const details = teamMembers.length
+          ? `<span class="table-team-members">${teamMembers.map((member) => `<span>${personAvatar(member)}<span>${member.position}. ${escapeHtml(member.name)} (${String(member.birth_year).slice(-2)})</span></span>`).join("")}</span>`
+          : `${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}`;
+        return `<tr><td>${tableIdentity}<small>${details}</small></td>
         <td class="official-result">${result.official_centiseconds == null ? "–" : formatTime(result.official_centiseconds)}</td>
         ${result.segments.map((value, lap) => {
           const group = lapGroups[lap] || [lap + 1];
