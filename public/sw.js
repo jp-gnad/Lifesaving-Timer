@@ -3,8 +3,8 @@ const eventCache = "lifesaving-timer-events-v1";
 const appShell = [
   "/",
   "/index.html",
-  "/styles.css?v=result-box-height",
-  "/app.js?v=result-reassignment",
+  "/styles.css?v=event-icons",
+  "/app.js?v=event-icons",
   "/icons.svg?v=participant-import",
   "/icon.svg",
   "/manifest.webmanifest",

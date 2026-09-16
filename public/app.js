@@ -61,6 +61,7 @@ const organizationCaps = [
 ];
 
 const capAssetBase = "https://raw.githubusercontent.com/jp-gnad/Lifesaving_Baden/main/web/assets/svg/";
+const eventAssetBase = "https://raw.githubusercontent.com/jp-gnad/Lifesaving_Baden/main/web/assets/png/events/";
 
 let refreshTimer = null;
 let cooldownTimer = null;
@@ -124,8 +125,34 @@ function personAvatar(person) {
   return `<span class="person-avatar ${genderClass} ${initials.length > 3 ? "long" : ""} ${capUrl ? "has-cap" : ""}" aria-hidden="true"><span>${escapeHtml(initials)}</span>${capUrl ? `<img src="${capUrl}" alt="" loading="lazy" decoding="async">` : ""}</span>`;
 }
 
+function eventIconMarkup(event, modifier = "") {
+  const year = String(event?.event_date || "").match(/^(\d{4})-/)?.[1];
+  const name = String(event?.name || "").trim();
+  if (!name || !year) return "";
+  const filename = `${name} - ${year}`;
+  const pngUrl = `${eventAssetBase}${encodeURIComponent(`${filename}.png`)}`;
+  const jpgUrl = `${eventAssetBase}${encodeURIComponent(`${filename}.jpg`)}`;
+  return `<span class="event-icon ${modifier}" hidden><img src="${pngUrl}" data-fallback-src="${jpgUrl}" alt="" loading="lazy" decoding="async"></span>`;
+}
+
+document.addEventListener("load", (event) => {
+  if (!(event.target instanceof HTMLImageElement) || !event.target.closest(".event-icon")) return;
+  event.target.closest(".event-icon").hidden = false;
+}, true);
+
 document.addEventListener("error", (event) => {
   if (!(event.target instanceof HTMLImageElement)) return;
+  const eventIcon = event.target.closest(".event-icon");
+  if (eventIcon) {
+    const fallbackSrc = event.target.dataset.fallbackSrc;
+    if (fallbackSrc) {
+      delete event.target.dataset.fallbackSrc;
+      event.target.src = fallbackSrc;
+    } else {
+      eventIcon.remove();
+    }
+    return;
+  }
   const avatar = event.target.closest(".person-avatar");
   if (!avatar) return;
   event.target.remove();
@@ -672,10 +699,10 @@ async function renderHome() {
     <section class="section event-list-section" aria-label="Events">
       ${events.length ? `<div class="stack">${events.map((event) => `
         <a class="card event-row" href="#/event/${event.id}" aria-label="${escapeHtml(event.name)} öffnen">
-          <div><h3>${escapeHtml(event.name)}</h3><div class="event-meta">
+          <div class="event-row-content">${eventIconMarkup(event, "event-list-icon")}<div class="event-row-copy"><h3>${escapeHtml(event.name)}</h3><div class="event-meta">
             <span class="meta-item">${icon("calendar")} ${escapeHtml(dateText(event.event_date))}</span>
             ${event.location ? `<span class="meta-item">${icon("location")} ${escapeHtml(event.location)}</span>` : ""}
-          </div></div>
+          </div></div></div>
           <span class="event-row-arrow">${icon("arrow-right")}</span>
         </a>`).join("")}</div>` : `<div class="empty">Noch kein Event vorhanden. Lege das erste Event an.</div>`}
     </section>
@@ -717,7 +744,7 @@ async function renderEvent(id) {
   setDocumentTitle(event.name);
   app.innerHTML = `
     <a class="back" href="#/" data-history-back>${icon("arrow-left")} Events</a>
-    <div class="page-head event-page-head"><div><div class="event-title-row"><h1>${escapeHtml(event.name)}</h1><button class="button secondary icon-button" id="edit-event" type="button" aria-label="Event bearbeiten" title="Event bearbeiten">${icon("pencil")}</button></div>
+    <div class="page-head event-page-head"><div><div class="event-title-row">${eventIconMarkup(event, "event-title-icon")}<h1>${escapeHtml(event.name)}</h1><button class="button secondary icon-button" id="edit-event" type="button" aria-label="Event bearbeiten" title="Event bearbeiten">${icon("pencil")}</button></div>
       <p class="event-summary">${escapeHtml(dateText(event.event_date))} · ${event.location ? escapeHtml(event.location) : "Kein Ort"} · ${participants.length} Personen</p></div>
     </div>
     <div class="event-action-grid">
