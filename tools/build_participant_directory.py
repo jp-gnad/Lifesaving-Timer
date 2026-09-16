@@ -95,10 +95,18 @@ def sql_text(records: list[list[object]]) -> str:
         )
     statements.extend(
         [
-            "INSERT OR REPLACE INTO participant_directory "
+            "INSERT INTO participant_directory "
             "(candidate_id,name,birth_year,gender,organization,search_name) "
             "SELECT candidate_id,name,birth_year,gender,organization,search_name "
-            "FROM participant_directory_staging;",
+            "FROM participant_directory_staging WHERE TRUE "
+            "ON CONFLICT(candidate_id) DO UPDATE SET "
+            "name=excluded.name,birth_year=excluded.birth_year,gender=excluded.gender,"
+            "organization=excluded.organization,search_name=excluded.search_name "
+            "WHERE participant_directory.name<>excluded.name "
+            "OR participant_directory.birth_year<>excluded.birth_year "
+            "OR participant_directory.gender<>excluded.gender "
+            "OR participant_directory.organization<>excluded.organization "
+            "OR participant_directory.search_name<>excluded.search_name;",
             "DELETE FROM participant_directory WHERE candidate_id NOT IN "
             "(SELECT candidate_id FROM participant_directory_staging);",
             "DELETE FROM participant_directory_staging;",
