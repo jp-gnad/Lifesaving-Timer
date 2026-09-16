@@ -1,0 +1,40 @@
+name: Personenliste aktualisieren
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Repository laden
+        uses: actions/checkout@v4
+
+      - name: Python einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Excel-Unterstützung installieren
+        run: python -m pip install openpyxl==3.1.5
+
+      - name: Quelldatei laden
+        env:
+          SOURCE_URL: ${{ secrets.PARTICIPANT_SOURCE_URL }}
+        run: curl --fail --location --silent --show-error "$SOURCE_URL" --output "$RUNNER_TEMP/source.xlsx"
+
+      - name: Suchliste erstellen
+        run: python tools/build_participant_directory.py "$RUNNER_TEMP/source.xlsx" "$RUNNER_TEMP/participant-directory.sql"
+
+      - name: Cloudflare D1 aktualisieren
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npx --yes wrangler@4.131.2 d1 execute lifesaving-timer-db --remote --file "$RUNNER_TEMP/participant-directory.sql"

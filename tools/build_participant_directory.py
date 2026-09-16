@@ -79,7 +79,7 @@ def sql_text(records: list[list[object]]) -> str:
     def quoted(value: object) -> str:
         return "'" + str(value).replace("'", "''") + "'"
 
-    statements = []
+    statements = ["DELETE FROM participant_directory_staging;"]
     for start in range(0, len(records), 100):
         values = []
         for candidate_id, name, birth_year, gender, organization, search_name in records[start : start + 100]:
@@ -88,11 +88,22 @@ def sql_text(records: list[list[object]]) -> str:
                 f"{quoted(organization)},{quoted(search_name)})"
             )
         statements.append(
-            "INSERT OR REPLACE INTO participant_directory "
+            "INSERT OR REPLACE INTO participant_directory_staging "
             "(candidate_id,name,birth_year,gender,organization,search_name) VALUES\n"
             + ",\n".join(values)
             + ";"
         )
+    statements.extend(
+        [
+            "INSERT OR REPLACE INTO participant_directory "
+            "(candidate_id,name,birth_year,gender,organization,search_name) "
+            "SELECT candidate_id,name,birth_year,gender,organization,search_name "
+            "FROM participant_directory_staging;",
+            "DELETE FROM participant_directory WHERE candidate_id NOT IN "
+            "(SELECT candidate_id FROM participant_directory_staging);",
+            "DELETE FROM participant_directory_staging;",
+        ]
+    )
     return "\n\n".join(statements) + "\n"
 
 
