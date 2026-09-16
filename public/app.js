@@ -1804,7 +1804,13 @@ async function renderTimer(id) {
 async function renderViewer(id, initialDiscipline = null, initialGender = null) {
   const { event, participants } = await api(`/events/${id}`);
   participants.sort(compareParticipantsByOrganization);
-  const eventPdfImagePromise = loadEventPdfImage(event);
+  let eventPdfImage = null;
+  let eventPdfImageReady = false;
+  loadEventPdfImage(event).then((image) => {
+    eventPdfImage = image;
+    eventPdfImageReady = true;
+    document.querySelector("#create-results-pdf")?.removeAttribute("disabled");
+  });
   const initialItem = disciplines[initialDiscipline];
   const validInitialGender = initialItem?.mixed ? initialGender === "mixed" : ["female", "male"].includes(initialGender);
   let selected = initialItem && validInitialGender
@@ -2163,15 +2169,13 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
       }).join("")}</div>`;
     resultsRoot.innerHTML = `<a class="viewer-list-back" id="viewer-list-back" href="#/viewer/${id}" data-history-back>${icon("arrow-left")} Ergebnisse</a>
       <div class="viewer-list-heading"><div class="viewer-list-title"><p class="eyebrow">${genderName(selected.gender)}</p><h2>${escapeHtml(item.name)}</h2></div>
-        <button class="button secondary results-pdf-button" id="create-results-pdf" type="button">PDF</button></div>
+        <button class="button secondary results-pdf-button" id="create-results-pdf" type="button" ${eventPdfImageReady ? "" : "disabled"}>PDF</button></div>
       ${results.length ? cardView : `<div class="empty">Noch keine Ergebnisse.</div>`}`;
     resultsRoot.querySelectorAll(".edit-result").forEach((button) => button.addEventListener("click", () => {
       const result = results.find((entry) => entry.id === button.dataset.id);
       if (result) openResultEditor(result);
     }));
-    document.querySelector("#create-results-pdf").addEventListener("click", async (clickEvent) => {
-      const pdfButton = clickEvent.currentTarget;
-      pdfButton.disabled = true;
+    document.querySelector("#create-results-pdf").addEventListener("click", () => {
       const headers = [
         "Name",
         "AK",
@@ -2208,12 +2212,7 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
         };
         return [person, ageGroup, ...lapCells, timeCell];
       });
-      try {
-        const eventImage = await eventPdfImagePromise;
-        openPdf(createResultsPdf(event.name, `${item.name} - ${genderName(selected.gender)}`, headers, rows, eventImage));
-      } finally {
-        pdfButton.disabled = false;
-      }
+      openPdf(createResultsPdf(event.name, `${item.name} - ${genderName(selected.gender)}`, headers, rows, eventPdfImage));
     });
   }
 
