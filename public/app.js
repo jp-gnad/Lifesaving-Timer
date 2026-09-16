@@ -452,9 +452,15 @@ function createResultsPdf(title, subtitle, headers, rows) {
     top -= headerHeight;
     pageData.forEach((row) => {
       x = margin;
-      row.forEach((cell, index) => {
-        const width = scaledWidths[index];
+      for (let index = 0; index < row.length;) {
+        const cell = row[index];
+        if (typeof cell === "object" && cell?.skip) {
+          index += 1;
+          continue;
+        }
         const value = typeof cell === "object" && cell !== null ? cell : { main: cell };
+        const columnSpan = Math.max(1, Math.min(Number(value.colSpan) || 1, row.length - index));
+        const width = scaledWidths.slice(index, index + columnSpan).reduce((sum, columnWidth) => sum + columnWidth, 0);
         const hasSecondary = Boolean(value.secondary);
         const centered = index > 0;
         const mainText = truncate(value.main, width);
@@ -470,7 +476,8 @@ function createResultsPdf(title, subtitle, headers, rows) {
           commands.push("0 g");
         }
         x += width;
-      });
+        index += columnSpan;
+      }
       top -= rowHeight;
     });
     return commands.join("\n");
@@ -1938,10 +1945,13 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
         result.segments.forEach((value, index) => {
           const group = groups[index] || [index + 1];
           const frequency = Number.isInteger(result.frequencies?.[index]) ? `${result.frequencies[index]}/min` : "";
-          lapCells[group[0] - 1] = value == null
-            ? "–"
-            : { main: formatReviewTime(value), secondary: frequency, tone: "frequency" };
-          group.slice(1).forEach((lap) => { lapCells[lap - 1] = ""; });
+          lapCells[group[0] - 1] = {
+            main: value == null ? "–" : formatReviewTime(value),
+            secondary: value == null ? "" : frequency,
+            tone: "frequency",
+            colSpan: group.length,
+          };
+          group.slice(1).forEach((lap) => { lapCells[lap - 1] = { skip: true }; });
         });
         const timeCell = {
           main: formatTime(stoppedTime),
