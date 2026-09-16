@@ -1861,6 +1861,9 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
   let loading = false;
   let allResults = [];
   let editingResult = null;
+  let resultEditLapGroups = [];
+  let resultEditGlueHistory = [];
+  let resultEditGlueMode = false;
   let activeResultParticipantSelect = null;
   let resultParticipantGenderFilter = "";
 
@@ -1970,6 +1973,13 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
     deleteResultButton.disabled = false;
     const item = disciplines[result.discipline];
     const lapGroups = resultLapGroups(result);
+    resultEditLapGroups = result.segments.map((value, index) => ({
+      laps: [...(lapGroups[index] || [index + 1])],
+      value,
+      frequency: result.frequencies?.[index] ?? null,
+    }));
+    resultEditGlueHistory = [];
+    resultEditGlueMode = false;
     const displayName = result.team_members?.length
       ? "Mannschaft"
       : `${result.participant_name} (${String(result.birth_year).slice(-2)})`;
@@ -1988,15 +1998,8 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
         <div class="field"><span class="label">Gestoppt</span><div class="total-summary"><strong id="result-edit-stopped">${formatTime(stoppedTime)}</strong></div></div>
         <label class="field"><span>Offiziell</span><input id="result-edit-official" inputmode="decimal" placeholder="m:ss,00" value="${result.official_centiseconds == null ? "" : formatTime(result.official_centiseconds)}"></label>
       </div>
-      <div class="result-edit-laps">${result.segments.map((value, index) => {
-        const group = lapGroups[index] || [index + 1];
-        const frequency = result.frequencies?.[index];
-        return `<div class="result-edit-lap">
-          <strong>${escapeHtml(disciplineLapGroupLabel(result.discipline, group))}</strong>
-          <label><span>Zeit (s)</span><input class="result-edit-segment" inputmode="decimal" value="${value == null ? "" : formatReviewTime(value)}"></label>
-          <label><span>Freq.</span><input class="result-edit-frequency" inputmode="numeric" value="${Number.isInteger(frequency) ? frequency : ""}"></label>
-        </div>`;
-      }).join("")}</div>
+      <div class="result-edit-lap-toolbar"><span class="label">Runden</span><div><button class="button secondary small" id="result-edit-glue-mode" type="button" aria-pressed="false">${icon("link")} Kleben</button><button class="button secondary small" id="result-edit-undo-glue" type="button" hidden>${icon("undo")} Rückgängig</button></div></div>
+      <div class="result-edit-laps"></div>
       <label class="field result-edit-note-field"><span>Notiz <small>optional</small></span><textarea id="result-edit-note" maxlength="300" rows="2" placeholder="Kurzes Feedback">${escapeHtml(result.note || "")}</textarea></label>`;
     const assignmentSelects = [...resultEditFields.querySelectorAll(".result-participant-select")];
     assignmentSelects.forEach(updateResultParticipantTrigger);
@@ -2009,7 +2012,76 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
       const validTotal = values.reduce((sum, value) => sum + (Number.isInteger(value) ? value : 0), 0);
       resultEditFields.querySelector("#result-edit-stopped").textContent = formatTime(validTotal);
     };
-    resultEditFields.querySelectorAll(".result-edit-segment").forEach((input) => input.addEventListener("input", updateStoppedTime));
+    const syncResultEditLapValues = () => {
+      const segmentInputs = [...resultEditFields.querySelectorAll(".result-edit-segment")];
+      const frequencyInputs = [...resultEditFields.querySelectorAll(".result-edit-frequency")];
+      const segments = segmentInputs.map((input) => input.value.trim() ? parseReviewTime(input.value) : null);
+      const frequencies = frequencyInputs.map((input) => input.value.trim() ? Number(input.value) : null);
+      if (segments.some((value, index) => segmentInputs[index].value.trim() && !Number.isInteger(value))) {
+        resultEditError.textContent = "Lap-Zeiten bitte als Sekunden eingeben, zum Beispiel 32,45.";
+        return false;
+      }
+      if (frequencies.some((value) => value !== null && (!Number.isInteger(value) || value < 1 || value > 999))) {
+        resultEditError.textContent = "Frequenzen müssen zwischen 1 und 999 liegen.";
+        return false;
+      }
+      resultEditLapGroups.forEach((group, index) => {
+        group.value = segments[index];
+        group.frequency = frequencies[index];
+      });
+      resultEditError.textContent = "";
+      return true;
+    };
+    const renderResultEditLaps = () => {
+      const lapsRoot = resultEditFields.querySelector(".result-edit-laps");
+      lapsRoot.innerHTML = resultEditLapGroups.map((group, index) => `<div class="result-edit-lap-block">
+        <div class="result-edit-lap">
+          <strong>${escapeHtml(disciplineLapGroupLabel(result.discipline, group.laps))}</strong>
+          <label><span>Zeit (s)</span><input class="result-edit-segment" inputmode="decimal" value="${group.value == null ? "" : formatReviewTime(group.value)}"></label>
+          <label><span>Freq.</span><input class="result-edit-frequency" inputmode="numeric" value="${Number.isInteger(group.frequency) ? group.frequency : ""}"></label>
+        </div>
+        ${resultEditGlueMode && index < resultEditLapGroups.length - 1 ? `<button class="result-edit-glue-next" type="button" data-glue-index="${index}" aria-label="${escapeHtml(disciplineLapGroupLabel(result.discipline, group.laps))} mit der nächsten Runde verbinden" title="Mit nächster Runde verbinden">${icon("link")}</button>` : ""}
+      </div>`).join("");
+      lapsRoot.querySelectorAll(".result-edit-segment").forEach((input) => input.addEventListener("input", updateStoppedTime));
+      lapsRoot.querySelectorAll(".result-edit-glue-next").forEach((button) => button.addEventListener("click", () => {
+        if (!syncResultEditLapValues()) return;
+        const index = Number(button.dataset.glueIndex);
+        const left = resultEditLapGroups[index];
+        const right = resultEditLapGroups[index + 1];
+        if (!left || !right) return;
+        resultEditGlueHistory.push(resultEditLapGroups.map((group) => ({ laps: [...group.laps], value: group.value, frequency: group.frequency })));
+        const leftValue = Number.isInteger(left.value) && left.value > 0 ? left.value : null;
+        const rightValue = Number.isInteger(right.value) && right.value > 0 ? right.value : null;
+        const frequency = Number.isInteger(left.frequency) && Number.isInteger(right.frequency)
+          ? (left.frequency === right.frequency ? left.frequency : null)
+          : (Number.isInteger(left.frequency) ? left.frequency : (Number.isInteger(right.frequency) ? right.frequency : null));
+        resultEditLapGroups.splice(index, 2, {
+          laps: [...left.laps, ...right.laps],
+          value: leftValue !== null || rightValue !== null ? (leftValue || 0) + (rightValue || 0) : null,
+          frequency,
+        });
+        resultEditFields.querySelector("#result-edit-undo-glue").hidden = false;
+        renderResultEditLaps();
+        updateStoppedTime();
+      }));
+    };
+    const glueModeButton = resultEditFields.querySelector("#result-edit-glue-mode");
+    glueModeButton.addEventListener("click", () => {
+      if (!syncResultEditLapValues()) return;
+      resultEditGlueMode = !resultEditGlueMode;
+      glueModeButton.classList.toggle("active", resultEditGlueMode);
+      glueModeButton.setAttribute("aria-pressed", String(resultEditGlueMode));
+      renderResultEditLaps();
+    });
+    resultEditFields.querySelector("#result-edit-undo-glue").addEventListener("click", () => {
+      const previous = resultEditGlueHistory.pop();
+      if (!previous) return;
+      resultEditLapGroups = previous;
+      resultEditFields.querySelector("#result-edit-undo-glue").hidden = resultEditGlueHistory.length === 0;
+      renderResultEditLaps();
+      updateStoppedTime();
+    });
+    renderResultEditLaps();
     showDialog(resultEditDialog, { focusField: false });
   }
 
@@ -2060,6 +2132,7 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
     const frequencyInputs = [...resultEditFields.querySelectorAll(".result-edit-frequency")];
     const segments = segmentInputs.map((input) => input.value.trim() ? parseReviewTime(input.value) : null);
     const frequencies = frequencyInputs.map((input) => input.value.trim() ? Number(input.value) : null);
+    const lapGroups = resultEditLapGroups.map((group) => [...group.laps]);
     const officialText = resultEditFields.querySelector("#result-edit-official").value.trim();
     const officialTime = officialText ? parseTime(officialText) : null;
     const note = resultEditFields.querySelector("#result-edit-note").value.trim();
@@ -2096,7 +2169,7 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
       const assignment = item.team ? { participantIds } : { participantId: participantIds[0] };
       await api(`/events/${id}/results/${editingResult.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ ...assignment, segments, frequencies, lapGroups: resultLapGroups(editingResult), officialTime, note }),
+        body: JSON.stringify({ ...assignment, segments, frequencies, lapGroups, officialTime, note }),
       });
       resultEditDialog.close();
       editingResult = null;
