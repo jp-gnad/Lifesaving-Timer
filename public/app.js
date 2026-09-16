@@ -388,7 +388,7 @@ function createResultsPdf(title, subtitle, headers, rows) {
   const pageHeight = 595.28;
   const margin = 28;
   const titleHeight = 42;
-  const headerHeight = 24;
+  const headerHeight = 36;
   const rowHeight = 27;
   const rowsPerPage = Math.max(1, Math.floor((pageHeight - (margin * 2) - titleHeight - headerHeight) / rowHeight));
   const pageRows = [];
@@ -396,35 +396,57 @@ function createResultsPdf(title, subtitle, headers, rows) {
   if (!pageRows.length) pageRows.push([]);
 
   const usableWidth = pageWidth - (margin * 2);
-  const ageGroupWidth = 44;
-  const timeWidth = 78;
-  const personWidth = headers.length > 12 ? 150 : 220;
-  const lapWidth = Math.max(22, (usableWidth - personWidth - ageGroupWidth - timeWidth) / Math.max(1, headers.length - 3));
-  const widths = headers.map((_, index) => index === 0 ? personWidth : (index === 1 ? ageGroupWidth : (index === 2 ? timeWidth : lapWidth)));
-  const widthScale = usableWidth / widths.reduce((sum, width) => sum + width, 0);
-  const scaledWidths = widths.map((width) => width * widthScale);
   const fontSize = headers.length > 14 ? 6 : 7;
+  const cellMain = (value) => typeof value === "object" && value !== null ? value.main : value;
+  const approximateTextWidth = (value, size = fontSize) => pdfSafeText(value).length * size * .52;
+  const longestPersonWidth = Math.max(
+    approximateTextWidth(cellMain(headers[0])),
+    ...rows.map((row) => approximateTextWidth(cellMain(row[0]))),
+  ) + 8;
+  const otherColumnCount = Math.max(1, headers.length - 1);
+  const personWidth = Math.min(longestPersonWidth, usableWidth - (otherColumnCount * 22));
+  const otherWidth = (usableWidth - personWidth) / otherColumnCount;
+  const scaledWidths = headers.map((_, index) => index === 0 ? personWidth : otherWidth);
 
   const truncate = (value, width, size = fontSize) => {
     const text = pdfSafeText(value);
     const maximum = Math.max(1, Math.floor((width - 6) / (size * .52)));
     return text.length > maximum ? `${text.slice(0, Math.max(1, maximum - 2))}..` : text;
   };
+  const textStart = (value, x, width, size, centered) => {
+    if (!centered) return x + 3;
+    const renderedWidth = Math.min(width - 6, approximateTextWidth(value, size));
+    return x + ((width - renderedWidth) / 2);
+  };
+  const generatedAt = new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(new Date());
   const pageContents = pageRows.map((pageData, pageIndex) => {
     const commands = [];
-    const generatedAt = new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(new Date());
     commands.push("0 g 0 G 0.45 w");
     commands.push(`BT /F2 13 Tf ${margin} ${pageHeight - margin - 12} Td (${pdfEscapedText(title)}) Tj ET`);
     commands.push(`0.35 g BT /F1 8 Tf ${margin} ${pageHeight - margin - 26} Td (${pdfEscapedText(subtitle)}) Tj ET`);
-    commands.push(`0.35 g BT /F1 7 Tf ${pageWidth - margin - 122} ${pageHeight - margin - 11} Td (${pdfEscapedText(generatedAt)}) Tj ET`);
-    commands.push(`0.35 g BT /F1 7 Tf ${pageWidth - margin - 70} ${pageHeight - margin - 24} Td (Seite ${pageIndex + 1}/${pageRows.length}) Tj ET`);
+    const dateWidth = approximateTextWidth(generatedAt, 7);
+    commands.push(`0.35 g BT /F1 7 Tf ${(pageWidth - margin - dateWidth).toFixed(2)} ${pageHeight - margin - 12} Td (${pdfEscapedText(generatedAt)}) Tj ET`);
+    const footer = `Seite ${pageIndex + 1}/${pageRows.length}`;
+    const footerWidth = approximateTextWidth(footer, 7);
+    commands.push(`0.35 g BT /F1 7 Tf ${((pageWidth - footerWidth) / 2).toFixed(2)} 14 Td (${footer}) Tj ET`);
     let top = pageHeight - margin - titleHeight;
     let x = margin;
     headers.forEach((header, index) => {
       const width = scaledWidths[index];
+      const value = typeof header === "object" && header !== null ? header : { main: header };
+      const centered = index > 0;
+      const headerMainSize = fontSize;
+      const headerSecondarySize = Math.max(4.5, fontSize - 1.5);
+      const mainText = truncate(value.main, width, headerMainSize);
+      const secondaryText = value.secondary ? truncate(value.secondary, width, headerSecondarySize) : "";
+      const mainX = textStart(mainText, x, width, headerMainSize, centered);
       commands.push(`0.93 g ${x.toFixed(2)} ${(top - headerHeight).toFixed(2)} ${width.toFixed(2)} ${headerHeight} re f`);
       commands.push(`0 g 0 G ${x.toFixed(2)} ${(top - headerHeight).toFixed(2)} ${width.toFixed(2)} ${headerHeight} re S`);
-      commands.push(`0 g BT /F2 ${fontSize} Tf ${(x + 3).toFixed(2)} ${(top - 15).toFixed(2)} Td (${pdfEscapedText(truncate(header, width))}) Tj ET`);
+      commands.push(`0 g BT /F2 ${headerMainSize} Tf ${mainX.toFixed(2)} ${(top - (secondaryText ? 14 : 22)).toFixed(2)} Td (${pdfEscapedText(mainText)}) Tj ET`);
+      if (secondaryText) {
+        const secondaryX = textStart(secondaryText, x, width, headerSecondarySize, centered);
+        commands.push(`0.35 g BT /F1 ${headerSecondarySize} Tf ${secondaryX.toFixed(2)} ${(top - 27).toFixed(2)} Td (${pdfEscapedText(secondaryText)}) Tj ET`);
+      }
       x += width;
     });
     top -= headerHeight;
@@ -434,12 +456,17 @@ function createResultsPdf(title, subtitle, headers, rows) {
         const width = scaledWidths[index];
         const value = typeof cell === "object" && cell !== null ? cell : { main: cell };
         const hasSecondary = Boolean(value.secondary);
+        const centered = index > 0;
+        const mainText = truncate(value.main, width);
+        const mainX = textStart(mainText, x, width, fontSize, centered);
         commands.push(`0 G ${x.toFixed(2)} ${(top - rowHeight).toFixed(2)} ${width.toFixed(2)} ${rowHeight} re S`);
-        commands.push(`0 g BT /${value.bold ? "F2" : "F1"} ${fontSize} Tf ${(x + 3).toFixed(2)} ${(top - (hasSecondary ? 11 : 17)).toFixed(2)} Td (${pdfEscapedText(truncate(value.main, width))}) Tj ET`);
+        commands.push(`0 g BT /${value.bold ? "F2" : "F1"} ${fontSize} Tf ${mainX.toFixed(2)} ${(top - (hasSecondary ? 11 : 17)).toFixed(2)} Td (${pdfEscapedText(mainText)}) Tj ET`);
         if (hasSecondary) {
           const secondarySize = Math.max(5, fontSize - 1.5);
+          const secondaryText = truncate(value.secondary, width, secondarySize);
+          const secondaryX = textStart(secondaryText, x, width, secondarySize, centered);
           commands.push(value.tone === "frequency" ? "0.58 0.38 0 rg" : "0.48 g");
-          commands.push(`BT /F1 ${secondarySize} Tf ${(x + 3).toFixed(2)} ${(top - 21).toFixed(2)} Td (${pdfEscapedText(truncate(value.secondary, width, secondarySize))}) Tj ET`);
+          commands.push(`BT /F1 ${secondarySize} Tf ${secondaryX.toFixed(2)} ${(top - 21).toFixed(2)} Td (${pdfEscapedText(secondaryText)}) Tj ET`);
           commands.push("0 g");
         }
         x += width;
@@ -1888,7 +1915,15 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
       if (result) openResultEditor(result);
     }));
     document.querySelector("#create-results-pdf").addEventListener("click", () => {
-      const headers = ["Name", "AK", "Zeit", ...Array.from({ length: lapCount }, (_, lap) => `Lap ${lap + 1}`)];
+      const headers = [
+        "Name",
+        "AK",
+        ...Array.from({ length: lapCount }, (_, lap) => ({
+          main: `Lap ${lap + 1}`,
+          secondary: disciplineLapLabel(selected.discipline, lap + 1),
+        })),
+        "Gesamtzeit",
+      ];
       const rows = results.map((result) => {
         const teamMembers = result.team_members || [];
         const person = teamMembers.length
@@ -1914,9 +1949,9 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
           secondary: result.official_centiseconds == null ? "" : `offi. ${formatTime(result.official_centiseconds)}`,
           tone: "muted",
         };
-        return [person, ageGroup, timeCell, ...lapCells];
+        return [person, ageGroup, ...lapCells, timeCell];
       });
-      openPdf(createResultsPdf(`Wettkampf: ${event.name}`, `${item.name} - ${genderName(selected.gender)}`, headers, rows));
+      openPdf(createResultsPdf(event.name, `${item.name} - ${genderName(selected.gender)}`, headers, rows));
     });
   }
 
