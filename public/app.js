@@ -606,10 +606,11 @@ async function renderTimer(id) {
     let editMode = false;
     let glueMode = false;
     const glueHistory = [];
-    const optionMarkup = () => participants.map((person) => `<option value="${person.id}">${escapeHtml(person.name)} · ${escapeHtml(person.age_group)} · ${escapeHtml(person.organization)}</option>`).join("");
+    const optionMarkup = () => participants.map((person) => `<option value="${person.id}">${escapeHtml(person.name)}</option>`).join("");
+    const assignmentControl = (id, label) => `<div class="field"><label for="${id}-picker">${label}</label><button class="participant-picker-trigger" id="${id}-picker" type="button" data-select-id="${id}" aria-haspopup="dialog"><span>Auswählen …</span>${icon("chevron-down")}</button><select class="participant-select" id="${id}" hidden tabindex="-1" aria-hidden="true"><option value="">Auswählen …</option>${optionMarkup()}</select></div>`;
     const assignmentMarkup = item.team
-      ? `<fieldset class="team-assignment"><legend>Mannschaft</legend>${Array.from({ length: 4 }, (_, index) => `<div class="field"><label for="participant-${index + 1}">Position ${index + 1}</label><select class="participant-select" id="participant-${index + 1}"><option value="">Auswählen …</option>${optionMarkup()}</select></div>`).join("")}</fieldset>`
-      : `<div class="field"><label for="participant">Person</label><select class="participant-select" id="participant"><option value="">Auswählen …</option>${optionMarkup()}</select></div>`;
+      ? `<fieldset class="team-assignment"><legend>Mannschaft</legend>${Array.from({ length: 4 }, (_, index) => assignmentControl(`participant-${index + 1}`, `Position ${index + 1}`)).join("")}</fieldset>`
+      : assignmentControl("participant", "Person");
     setTimerInteractionLock(false);
     setReviewInteractionLock(true);
     elements["timer-view"].hidden = true;
@@ -630,6 +631,16 @@ async function renderTimer(id) {
         <div class="glue-hint" id="glue-hint" hidden><span>Benachbarte Runden über das Kettensymbol verbinden.</span><button class="button secondary small" id="undo-glue" type="button" hidden>${icon("undo")} Rückgängig</button></div>
         <div class="edit-times" id="edit-times"></div>
       </section></div>
+      <dialog class="participant-picker-dialog" id="participant-picker-dialog"><div class="dialog-body participant-picker-body">
+        <div class="dialog-title-row"><h2>Person auswählen</h2><button type="button" class="button secondary icon-button" data-close aria-label="Schließen">${icon("x")}</button></div>
+        <div class="field participant-search"><label for="participant-search">Suchen</label><input id="participant-search" type="search" inputmode="search" autocomplete="off" placeholder="Name oder Gliederung"></div>
+        <div class="participant-filters">
+          <div class="field"><span class="label">Geschlecht</span><div class="participant-gender-filter" role="group" aria-label="Nach Geschlecht filtern"><button type="button" class="active" data-picker-gender="" aria-pressed="true">Alle</button><button type="button" data-picker-gender="female" aria-pressed="false">W</button><button type="button" data-picker-gender="male" aria-pressed="false">M</button></div></div>
+          <div class="field"><label for="participant-age-filter">Altersklasse</label><select id="participant-age-filter"><option value="">Alle</option></select></div>
+        </div>
+        <div class="participant-picker-list" id="participant-picker-list" role="listbox" aria-label="Personen"></div>
+        <p class="participant-picker-empty" id="participant-picker-empty" hidden>Keine Person gefunden.</p>
+      </div></dialog>
       <dialog id="review-person-dialog"><form class="dialog-body" id="review-person-form">
         <div class="dialog-title-row"><h2>Neue Person</h2><button type="button" class="button secondary icon-button" data-close aria-label="Schließen">${icon("x")}</button></div>
         <div class="form-grid">
@@ -648,10 +659,71 @@ async function renderTimer(id) {
     const participantSelects = [...review.querySelectorAll(".participant-select")];
     const saveResult = review.querySelector("#save-result");
     const personDialog = review.querySelector("#review-person-dialog");
+    const participantPickerDialog = review.querySelector("#participant-picker-dialog");
+    const participantPickerList = review.querySelector("#participant-picker-list");
+    const participantPickerEmpty = review.querySelector("#participant-picker-empty");
+    const participantSearch = review.querySelector("#participant-search");
+    const participantAgeFilter = review.querySelector("#participant-age-filter");
+    const participantPickerTriggers = [...review.querySelectorAll(".participant-picker-trigger")];
     const personForm = review.querySelector("#review-person-form");
     const reviewSummary = review.querySelector("#review-summary");
     const reviewEditor = review.querySelector("#review-editor");
     const reviewTitle = review.querySelector("#review-title");
+    let activeParticipantSelect = null;
+    let participantGenderFilter = "";
+
+    function participantName(person) {
+      return `${person.name} (${String(person.birth_year).slice(-2)})`;
+    }
+
+    function updateParticipantTrigger(select) {
+      const trigger = participantPickerTriggers.find((button) => button.dataset.selectId === select.id);
+      if (!trigger) return;
+      const person = participants.find((candidate) => candidate.id === select.value);
+      trigger.querySelector("span").textContent = person ? participantName(person) : "Auswählen …";
+      trigger.classList.toggle("selected", Boolean(person));
+    }
+
+    function renderParticipantAgeFilter() {
+      const selectedAgeGroup = participantAgeFilter.value;
+      const ageGroups = [...new Set(participants.map((person) => person.age_group).filter(Boolean))]
+        .sort((left, right) => left.localeCompare(right, "de", { numeric: true, sensitivity: "base" }));
+      participantAgeFilter.innerHTML = `<option value="">Alle</option>${ageGroups.map((ageGroup) => `<option value="${escapeHtml(ageGroup)}">${escapeHtml(ageGroup)}</option>`).join("")}`;
+      participantAgeFilter.value = ageGroups.includes(selectedAgeGroup) ? selectedAgeGroup : "";
+    }
+
+    function renderParticipantPicker() {
+      const query = participantSearch.value.trim().toLocaleLowerCase("de-DE");
+      const ageGroup = participantAgeFilter.value;
+      const matches = participants
+        .filter((person) => !participantGenderFilter || person.gender === participantGenderFilter)
+        .filter((person) => !ageGroup || person.age_group === ageGroup)
+        .filter((person) => !query || [person.name, person.organization, person.age_group, person.birth_year]
+          .some((value) => String(value).toLocaleLowerCase("de-DE").includes(query)))
+        .sort((left, right) => left.name.localeCompare(right.name, "de", { numeric: true, sensitivity: "base" }));
+      participantPickerList.innerHTML = matches.map((person) => {
+        const assignedElsewhere = participantSelects.find((select) => select !== activeParticipantSelect && select.value === person.id);
+        const selected = activeParticipantSelect?.value === person.id;
+        return `<button class="participant-picker-option ${selected ? "selected" : ""}" type="button" data-person-id="${person.id}" role="option" aria-selected="${selected}" ${assignedElsewhere ? "disabled" : ""}><span><strong>${escapeHtml(participantName(person))}</strong><small>${escapeHtml(person.organization)} · ${escapeHtml(person.age_group)} · ${person.gender === "male" ? "m" : "w"}</small></span>${assignedElsewhere ? `<small>Position ${participantSelects.indexOf(assignedElsewhere) + 1}</small>` : (selected ? icon("check") : icon("arrow-right"))}</button>`;
+      }).join("");
+      participantPickerEmpty.hidden = matches.length !== 0;
+    }
+
+    function openParticipantPicker(select) {
+      activeParticipantSelect = select;
+      participantSearch.value = "";
+      participantGenderFilter = "";
+      participantAgeFilter.value = "";
+      review.querySelectorAll("[data-picker-gender]").forEach((button) => {
+        const active = button.dataset.pickerGender === "";
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", String(active));
+      });
+      renderParticipantAgeFilter();
+      renderParticipantPicker();
+      participantPickerDialog.showModal();
+      participantSearch.focus();
+    }
 
     function syncLapGroupsFromInputs() {
       const timeInputs = [...editTimes.querySelectorAll(".segment-input")];
@@ -808,6 +880,29 @@ async function renderTimer(id) {
       readCorrections(false);
     });
     bindDialogClose(personDialog);
+    bindDialogClose(participantPickerDialog);
+    participantPickerTriggers.forEach((trigger) => trigger.addEventListener("click", () => {
+      openParticipantPicker(review.querySelector(`#${trigger.dataset.selectId}`));
+    }));
+    participantSearch.addEventListener("input", renderParticipantPicker);
+    participantAgeFilter.addEventListener("change", renderParticipantPicker);
+    review.querySelectorAll("[data-picker-gender]").forEach((button) => button.addEventListener("click", () => {
+      participantGenderFilter = button.dataset.pickerGender;
+      review.querySelectorAll("[data-picker-gender]").forEach((candidate) => {
+        const active = candidate === button;
+        candidate.classList.toggle("active", active);
+        candidate.setAttribute("aria-pressed", String(active));
+      });
+      renderParticipantPicker();
+    }));
+    participantPickerList.addEventListener("click", (clickEvent) => {
+      const choice = clickEvent.target.closest("[data-person-id]");
+      if (!choice || !activeParticipantSelect) return;
+      activeParticipantSelect.value = choice.dataset.personId;
+      updateParticipantTrigger(activeParticipantSelect);
+      readCorrections(false);
+      participantPickerDialog.close();
+    });
     review.querySelector("#new-review-person").addEventListener("click", () => {
       personForm.reset();
       personForm.querySelector('[type="submit"]').disabled = false;
@@ -833,6 +928,7 @@ async function renderTimer(id) {
         });
         const emptySelect = participantSelects.find((select) => !select.value) || participantSelects[0];
         emptySelect.value = person.id;
+        updateParticipantTrigger(emptySelect);
         saveResult.disabled = participants.length < (item.team ? 4 : 1);
         personDialog.close();
         showToast("Person wurde hinzugefügt und ausgewählt.");

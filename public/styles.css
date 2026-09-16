@@ -269,11 +269,34 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 .total-summary strong { font-size: 24px; font-variant-numeric: tabular-nums; }
 .official-time-field { margin: 16px 0; }
 .review-assignment-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; }
-.review-assignment-row select, .review-assignment-row .add-review-person { height: 40px; min-height: 40px; }
+.review-assignment-row .participant-picker-trigger, .review-assignment-row .add-review-person { height: 40px; min-height: 40px; }
 .review-assignment-row .add-review-person { width: auto; margin: 0; padding: 0 12px; font-weight: 600; }
+.participant-picker-trigger { width: 100%; min-width: 0; min-height: 50px; border: 1px solid #bec9d8; border-radius: 8px; padding: 8px 10px; background: #fff; color: var(--muted); display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; cursor: pointer; }
+.participant-picker-trigger > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.participant-picker-trigger.selected { border-color: #8eb9f3; color: var(--text); }
+.participant-picker-trigger .icon { color: var(--primary); }
 .team-assignment { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; border: 0; padding: 0; }
 .team-assignment legend { grid-column: 1 / -1; margin-bottom: 7px; padding: 0; font-size: 14px; font-weight: 700; }
 .add-review-person { width: 100%; margin-top: 10px; }
+.participant-picker-dialog { width: min(520px, calc(100% - 16px)); height: min(720px, calc(100dvh - 32px)); overflow: hidden; }
+.participant-picker-body { height: 100%; min-height: 0; display: flex; flex-direction: column; }
+.participant-picker-body .dialog-title-row { flex: 0 0 auto; margin-bottom: 12px; }
+.participant-picker-body .participant-search { flex: 0 0 auto; }
+.participant-filters { flex: 0 0 auto; display: grid; grid-template-columns: minmax(0, .75fr) minmax(0, 1.25fr); align-items: end; gap: 8px; margin-top: 10px; }
+.participant-filters select { min-height: 40px; padding: 7px 9px; }
+.participant-gender-filter { min-height: 40px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; border: 1px solid var(--line); border-radius: 8px; padding: 2px; background: var(--surface-alt); }
+.participant-gender-filter button { min-width: 0; border: 0; border-radius: 6px; padding: 4px; background: transparent; color: var(--muted); cursor: pointer; font-weight: 650; }
+.participant-gender-filter button.active { background: #fff; color: var(--primary-dark); box-shadow: 0 1px 3px rgba(23, 32, 51, .12); }
+.participant-picker-list { flex: 1 1 auto; min-height: 0; display: grid; align-content: start; gap: 7px; margin-top: 14px; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.participant-picker-option { width: 100%; min-width: 0; min-height: 58px; border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; background: #fff; color: var(--text); display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; cursor: pointer; }
+.participant-picker-option > span:first-child { min-width: 0; display: grid; gap: 2px; }
+.participant-picker-option strong, .participant-picker-option small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.participant-picker-option strong { font-size: 14px; }
+.participant-picker-option small { color: var(--muted); font-size: 11px; }
+.participant-picker-option > .icon { color: var(--primary); }
+.participant-picker-option.selected { border-color: #8eb9f3; background: #edf6ff; }
+.participant-picker-option:disabled { background: var(--surface-alt); color: var(--muted); cursor: not-allowed; opacity: .72; }
+.participant-picker-empty { margin: 24px 0 auto; color: var(--muted); text-align: center; }
 
 .result-selection { width: 100%; display: grid; gap: 8px; }
 .result-selection-row { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -376,6 +399,7 @@ body.timer-page.review-active { position: fixed; inset: 0; width: 100%; height: 
 .timer-page .team-assignment legend { margin-bottom: 3px; }
 .timer-page .add-review-person { min-height: 40px; margin-top: 7px; }
 .timer-page .review-assignment-row .add-review-person { height: 40px; margin-top: 0; }
+.timer-page .participant-picker-trigger { min-height: 40px; height: 40px; border-color: #d8dde7; }
 .timer-page .review-summary > .save-actions { margin-top: auto; padding-top: clamp(28px, 6vh, 52px); }
 .timer-page #save-error:empty { display: none; }
 .timer-page label { color: #172033; }
