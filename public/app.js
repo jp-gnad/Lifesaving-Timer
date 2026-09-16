@@ -1808,7 +1808,6 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
         <div class="field"><span class="label">Gestoppt</span><div class="total-summary"><strong id="result-edit-stopped">${formatTime(stoppedTime)}</strong></div></div>
         <label class="field"><span>Offiziell</span><input id="result-edit-official" inputmode="decimal" placeholder="m:ss,00" value="${result.official_centiseconds == null ? "" : formatTime(result.official_centiseconds)}"></label>
       </div>
-      <label class="field result-edit-note-field"><span>Notiz <small>optional</small></span><textarea id="result-edit-note" maxlength="300" rows="2" placeholder="Kurzes Feedback">${escapeHtml(result.note || "")}</textarea></label>
       <div class="result-edit-laps">${result.segments.map((value, index) => {
         const group = lapGroups[index] || [index + 1];
         const frequency = result.frequencies?.[index];
@@ -1817,7 +1816,8 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
           <label><span>Zeit (s)</span><input class="result-edit-segment" inputmode="decimal" value="${value == null ? "" : formatReviewTime(value)}"></label>
           <label><span>Freq.</span><input class="result-edit-frequency" inputmode="numeric" value="${Number.isInteger(frequency) ? frequency : ""}"></label>
         </div>`;
-      }).join("")}</div>`;
+      }).join("")}</div>
+      <label class="field result-edit-note-field"><span>Notiz <small>optional</small></span><textarea id="result-edit-note" maxlength="300" rows="2" placeholder="Kurzes Feedback">${escapeHtml(result.note || "")}</textarea></label>`;
     const updateStoppedTime = () => {
       const values = [...resultEditFields.querySelectorAll(".result-edit-segment")]
         .map((input) => input.value.trim() ? parseReviewTime(input.value) : null);
