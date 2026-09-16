@@ -125,13 +125,17 @@ function personAvatar(person) {
   return `<span class="person-avatar ${genderClass} ${initials.length > 3 ? "long" : ""} ${capUrl ? "has-cap" : ""}" aria-hidden="true"><span>${escapeHtml(initials)}</span>${capUrl ? `<img src="${capUrl}" alt="" loading="lazy" decoding="async">` : ""}</span>`;
 }
 
-function eventIconMarkup(event, modifier = "") {
+function eventIconUrls(event) {
   const year = String(event?.event_date || "").match(/^(\d{4})-/)?.[1];
   const name = String(event?.name || "").trim();
-  if (!name || !year) return "";
+  if (!name || !year) return [];
   const filename = `${name} - ${year}`;
-  const pngUrl = `${eventAssetBase}${encodeURIComponent(`${filename}.png`)}`;
-  const jpgUrl = `${eventAssetBase}${encodeURIComponent(`${filename}.jpg`)}`;
+  return ["png", "jpg"].map((extension) => `${eventAssetBase}${encodeURIComponent(`${filename}.${extension}`)}`);
+}
+
+function eventIconMarkup(event, modifier = "") {
+  const [pngUrl, jpgUrl] = eventIconUrls(event);
+  if (!pngUrl) return "";
   return `<span class="event-icon ${modifier}" hidden><img src="${pngUrl}" data-fallback-src="${jpgUrl}" alt="" loading="eager" decoding="async"></span>`;
 }
 
@@ -410,7 +414,50 @@ function pdfEscapedText(value) {
   return pdfSafeText(value).replace(/([\\()])/g, "\\$1");
 }
 
-function createResultsPdf(title, subtitle, headers, rows) {
+async function loadEventPdfImage(event) {
+  for (const url of eventIconUrls(event)) {
+    try {
+      const response = await fetch(url, { cache: "force-cache" });
+      if (!response.ok) continue;
+      const blob = await response.blob();
+      const image = await new Promise((resolve, reject) => {
+        const objectUrl = URL.createObjectURL(blob);
+        const element = new Image();
+        element.addEventListener("load", () => {
+          URL.revokeObjectURL(objectUrl);
+          resolve(element);
+        }, { once: true });
+        element.addEventListener("error", () => {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error("Eventbild konnte nicht gelesen werden."));
+        }, { once: true });
+        element.src = objectUrl;
+      });
+      const maximumPixels = 180;
+      const scale = Math.min(1, maximumPixels / Math.max(image.naturalWidth, image.naturalHeight));
+      const width = Math.max(1, Math.round(image.naturalWidth * scale));
+      const height = Math.max(1, Math.round(image.naturalHeight * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) return null;
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, width, height);
+      context.drawImage(image, 0, 0, width, height);
+      const jpegBase64 = canvas.toDataURL("image/jpeg", .9).split(",")[1];
+      const binary = atob(jpegBase64);
+      let hex = "";
+      for (let index = 0; index < binary.length; index += 1) hex += binary.charCodeAt(index).toString(16).padStart(2, "0");
+      return { width, height, hex };
+    } catch {
+      // Try the next supported file extension.
+    }
+  }
+  return null;
+}
+
+function createResultsPdf(title, subtitle, headers, rows, eventImage = null) {
   const pageWidth = 841.89;
   const pageHeight = 595.28;
   const margin = 28;
@@ -449,8 +496,17 @@ function createResultsPdf(title, subtitle, headers, rows) {
   const pageContents = pageRows.map((pageData, pageIndex) => {
     const commands = [];
     commands.push("0 g 0 G 0.45 w");
-    commands.push(`BT /F2 13 Tf ${margin} ${pageHeight - margin - 12} Td (${pdfEscapedText(title)}) Tj ET`);
-    commands.push(`0.35 g BT /F1 8 Tf ${margin} ${pageHeight - margin - 26} Td (${pdfEscapedText(subtitle)}) Tj ET`);
+    let titleX = margin;
+    if (eventImage) {
+      const imageScale = Math.min(30 / eventImage.width, 30 / eventImage.height);
+      const imageWidth = eventImage.width * imageScale;
+      const imageHeight = eventImage.height * imageScale;
+      const imageY = pageHeight - margin - 34 + ((30 - imageHeight) / 2);
+      commands.push(`q ${imageWidth.toFixed(2)} 0 0 ${imageHeight.toFixed(2)} ${margin} ${imageY.toFixed(2)} cm /Im1 Do Q`);
+      titleX += imageWidth + 8;
+    }
+    commands.push(`BT /F2 13 Tf ${titleX.toFixed(2)} ${pageHeight - margin - 12} Td (${pdfEscapedText(title)}) Tj ET`);
+    commands.push(`0.35 g BT /F1 8 Tf ${titleX.toFixed(2)} ${pageHeight - margin - 26} Td (${pdfEscapedText(subtitle)}) Tj ET`);
     const dateWidth = approximateTextWidth(generatedAt, 7);
     commands.push(`0.35 g BT /F1 7 Tf ${(pageWidth - margin - dateWidth).toFixed(2)} ${pageHeight - margin - 12} Td (${pdfEscapedText(generatedAt)}) Tj ET`);
     const footer = `Seite ${pageIndex + 1}/${pageRows.length}`;
@@ -512,6 +568,7 @@ function createResultsPdf(title, subtitle, headers, rows) {
 
   const fontRegularId = 3 + (pageContents.length * 2);
   const fontBoldId = fontRegularId + 1;
+  const imageId = eventImage ? fontBoldId + 1 : null;
   const objects = [];
   const pageIds = pageContents.map((_, index) => 3 + (index * 2));
   objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
@@ -519,11 +576,13 @@ function createResultsPdf(title, subtitle, headers, rows) {
   pageContents.forEach((content, index) => {
     const pageId = pageIds[index];
     const contentId = pageId + 1;
-    objects[pageId] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 ${fontRegularId} 0 R /F2 ${fontBoldId} 0 R >> >> /Contents ${contentId} 0 R >>`;
+    const imageResources = imageId ? ` /XObject << /Im1 ${imageId} 0 R >>` : "";
+    objects[pageId] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 ${fontRegularId} 0 R /F2 ${fontBoldId} 0 R >>${imageResources} >> /Contents ${contentId} 0 R >>`;
     objects[contentId] = `<< /Length ${content.length} >>\nstream\n${content}\nendstream`;
   });
   objects[fontRegularId] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
   objects[fontBoldId] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>";
+  if (imageId) objects[imageId] = `<< /Type /XObject /Subtype /Image /Width ${eventImage.width} /Height ${eventImage.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter [/ASCIIHexDecode /DCTDecode] /Length ${eventImage.hex.length + 1} >>\nstream\n${eventImage.hex}>\nendstream`;
 
   let documentText = "%PDF-1.4\n";
   const offsets = [0];
@@ -1745,6 +1804,7 @@ async function renderTimer(id) {
 async function renderViewer(id, initialDiscipline = null, initialGender = null) {
   const { event, participants } = await api(`/events/${id}`);
   participants.sort(compareParticipantsByOrganization);
+  const eventPdfImagePromise = loadEventPdfImage(event);
   const initialItem = disciplines[initialDiscipline];
   const validInitialGender = initialItem?.mixed ? initialGender === "mixed" : ["female", "male"].includes(initialGender);
   let selected = initialItem && validInitialGender
@@ -2109,7 +2169,9 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
       const result = results.find((entry) => entry.id === button.dataset.id);
       if (result) openResultEditor(result);
     }));
-    document.querySelector("#create-results-pdf").addEventListener("click", () => {
+    document.querySelector("#create-results-pdf").addEventListener("click", async (clickEvent) => {
+      const pdfButton = clickEvent.currentTarget;
+      pdfButton.disabled = true;
       const headers = [
         "Name",
         "AK",
@@ -2146,7 +2208,12 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
         };
         return [person, ageGroup, ...lapCells, timeCell];
       });
-      openPdf(createResultsPdf(event.name, `${item.name} - ${genderName(selected.gender)}`, headers, rows));
+      try {
+        const eventImage = await eventPdfImagePromise;
+        openPdf(createResultsPdf(event.name, `${item.name} - ${genderName(selected.gender)}`, headers, rows, eventImage));
+      } finally {
+        pdfButton.disabled = false;
+      }
     });
   }
 
