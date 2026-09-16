@@ -60,6 +60,8 @@ let refreshTimer = null;
 let cooldownTimer = null;
 let animationFrame = null;
 let toastTimer = null;
+let dialogScrollPosition = null;
+let dialogReleaseFrame = null;
 
 function icon(name) {
   return `<svg class="icon" aria-hidden="true"><use href="/icons.svg?v=participant-import#${name}"></use></svg>`;
@@ -248,8 +250,33 @@ function renderError(error, back = "#/", backText = "Zurück zur Übersicht") {
   document.querySelector("#retry").addEventListener("click", renderRoute);
 }
 
-function openDialog(id, { focusField = true } = {}) {
-  const dialog = document.querySelector(id);
+function lockDialogBackground() {
+  cancelAnimationFrame(dialogReleaseFrame);
+  if (dialogScrollPosition) return;
+  const fixedPage = ["home-page", "event-page", "people-page", "timer-page"]
+    .some((className) => document.body.classList.contains(className));
+  const position = fixedPage ? { x: 0, y: 0 } : { x: window.scrollX, y: window.scrollY };
+  if (fixedPage) window.scrollTo(0, 0);
+  dialogScrollPosition = position;
+  document.body.style.setProperty("--dialog-lock-top", `${-position.y}px`);
+  document.body.classList.add("dialog-open");
+}
+
+function releaseDialogBackground() {
+  cancelAnimationFrame(dialogReleaseFrame);
+  dialogReleaseFrame = requestAnimationFrame(() => {
+    if (document.querySelector("dialog[open]")) return;
+    const position = dialogScrollPosition;
+    if (!position) return;
+    dialogScrollPosition = null;
+    document.body.classList.remove("dialog-open");
+    document.body.style.removeProperty("--dialog-lock-top");
+    window.scrollTo(position.x, position.y);
+  });
+}
+
+function showDialog(dialog, { focusField = true } = {}) {
+  lockDialogBackground();
   if (focusField) {
     dialog.removeAttribute("autofocus");
     dialog.removeAttribute("tabindex");
@@ -258,8 +285,12 @@ function openDialog(id, { focusField = true } = {}) {
     dialog.tabIndex = -1;
   }
   dialog.showModal();
-  if (focusField) dialog.querySelector("input, select")?.focus();
+  if (focusField) dialog.querySelector("input, select")?.focus({ preventScroll: true });
   else dialog.focus({ preventScroll: true });
+}
+
+function openDialog(id, options = {}) {
+  showDialog(document.querySelector(id), options);
 }
 
 function bindDialogClose(dialog) {
@@ -267,7 +298,12 @@ function bindDialogClose(dialog) {
   dialog.addEventListener("click", (event) => {
     if (event.target === dialog) dialog.close();
   });
+  dialog.addEventListener("close", releaseDialogBackground);
 }
+
+new MutationObserver(() => {
+  if (dialogScrollPosition && !document.querySelector("dialog[open]")) releaseDialogBackground();
+}).observe(app, { childList: true, subtree: true });
 
 async function renderHome() {
   setDocumentTitle("");
@@ -300,7 +336,7 @@ async function renderHome() {
 
   const dialog = document.querySelector("#event-dialog");
   bindDialogClose(dialog);
-  document.querySelector("#new-event").addEventListener("click", () => openDialog("#event-dialog"));
+  document.querySelector("#new-event").addEventListener("click", () => openDialog("#event-dialog", { focusField: false }));
   document.querySelector("#event-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const submit = event.submitter;
@@ -349,7 +385,7 @@ async function renderEvent(id) {
   bindDialogClose(eventDialog);
   document.querySelector("#edit-event").addEventListener("click", () => {
     document.querySelector("#event-edit-error").textContent = "";
-    openDialog("#event-edit-dialog");
+    openDialog("#event-edit-dialog", { focusField: false });
   });
   eventForm.addEventListener("submit", async (submitEvent) => {
     submitEvent.preventDefault();
@@ -923,8 +959,7 @@ async function renderTimer(id) {
       });
       renderParticipantAgeFilter();
       renderParticipantPicker();
-      participantPickerDialog.showModal();
-      participantPickerDialog.focus({ preventScroll: true });
+      showDialog(participantPickerDialog, { focusField: false });
     }
 
     function syncLapGroupsFromInputs() {
@@ -1129,8 +1164,7 @@ async function renderTimer(id) {
       personForm.reset();
       personForm.querySelector('[type="submit"]').disabled = false;
       review.querySelector("#review-person-error").textContent = "";
-      personDialog.showModal();
-      personForm.elements.name.focus();
+      showDialog(personDialog);
     });
     personForm.addEventListener("submit", async (submitEvent) => {
       submitEvent.preventDefault();
@@ -1212,7 +1246,7 @@ async function renderTimer(id) {
   bindDialogClose(elements["discipline-dialog"]);
   elements["mode-button"].addEventListener("click", () => {
     renderModeCategories();
-    elements["discipline-dialog"].showModal();
+    showDialog(elements["discipline-dialog"], { focusField: false });
   });
   document.querySelector("#close-mode").addEventListener("click", () => elements["discipline-dialog"].close());
   modeBack.addEventListener("click", renderModeCategories);
