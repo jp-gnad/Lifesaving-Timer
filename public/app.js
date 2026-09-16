@@ -62,6 +62,7 @@ let animationFrame = null;
 let toastTimer = null;
 let dialogScrollPosition = null;
 let dialogReleaseFrame = null;
+let dialogRestoreTimer = null;
 
 function icon(name) {
   return `<svg class="icon" aria-hidden="true"><use href="/icons.svg?v=participant-import#${name}"></use></svg>`;
@@ -252,6 +253,7 @@ function renderError(error, back = "#/", backText = "Zurück zur Übersicht") {
 
 function lockDialogBackground() {
   cancelAnimationFrame(dialogReleaseFrame);
+  clearTimeout(dialogRestoreTimer);
   if (dialogScrollPosition) return;
   const fixedPage = ["home-page", "event-page", "people-page", "timer-page"]
     .some((className) => document.body.classList.contains(className));
@@ -271,7 +273,15 @@ function releaseDialogBackground() {
     dialogScrollPosition = null;
     document.body.classList.remove("dialog-open");
     document.body.style.removeProperty("--dialog-lock-top");
-    window.scrollTo(position.x, position.y);
+    const restorePosition = () => {
+      window.scrollTo(position.x, position.y);
+      document.documentElement.scrollTop = position.y;
+      document.body.scrollTop = position.y;
+    };
+    restorePosition();
+    dialogRestoreTimer = setTimeout(() => {
+      if (!dialogScrollPosition) restorePosition();
+    }, 400);
   });
 }
 
@@ -336,7 +346,7 @@ async function renderHome() {
 
   const dialog = document.querySelector("#event-dialog");
   bindDialogClose(dialog);
-  document.querySelector("#new-event").addEventListener("click", () => openDialog("#event-dialog", { focusField: false }));
+  document.querySelector("#new-event").addEventListener("click", () => openDialog("#event-dialog"));
   document.querySelector("#event-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const submit = event.submitter;
@@ -385,7 +395,7 @@ async function renderEvent(id) {
   bindDialogClose(eventDialog);
   document.querySelector("#edit-event").addEventListener("click", () => {
     document.querySelector("#event-edit-error").textContent = "";
-    openDialog("#event-edit-dialog", { focusField: false });
+    openDialog("#event-edit-dialog");
   });
   eventForm.addEventListener("submit", async (submitEvent) => {
     submitEvent.preventDefault();
