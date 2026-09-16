@@ -231,8 +231,13 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 .result-person-identity .person-avatar { width: 30px; height: 30px; }
 .result-meta { margin-top: 2px; color: var(--muted); font-size: 13px; }
 .result-team-members { display: grid; gap: 1px; margin-top: 4px; color: var(--muted); font-size: 12px; }
-.result-team-member { min-width: 0; display: flex; align-items: center; gap: 6px; }
+.result-team-member { min-width: 0; min-height: 27px; display: flex; align-items: center; justify-content: space-between; gap: 9px; }
+.result-team-person { min-width: 0; display: flex; align-items: center; gap: 6px; }
+.result-team-person > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .result-team-member .person-avatar { width: 22px; height: 22px; font-size: 8px; }
+.result-team-split { flex: 0 0 auto; display: flex; align-items: baseline; gap: 5px; color: var(--text); font-variant-numeric: tabular-nums; }
+.result-team-split strong { font-size: 12px; font-weight: 650; }
+.result-team-split small { color: #a66d00; font-size: 9px; font-weight: 700; }
 .result-times { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 14px 0 11px; }
 .result-times > div { display: grid; gap: 2px; border-radius: 7px; padding: 7px 9px; background: var(--surface-alt); }
 .result-times span { color: var(--muted); font-size: 11px; font-weight: 600; }
@@ -252,6 +257,7 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 .result-laps-details[open] summary::after { content: "−"; }
 .result-laps-details summary span { margin-left: auto; color: var(--muted); font-size: 11px; font-weight: 600; }
 .result-laps-details .result-segments { padding-top: 5px; }
+.team-note-details summary { justify-content: flex-start; }
 .result-feedback { margin: 4px 0 7px; border-left: 3px solid #c8d7ec; border-radius: 0 7px 7px 0; padding: 7px 9px; background: #f7f9fc; }
 .result-feedback strong { display: block; margin-bottom: 1px; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
 .result-feedback p { margin: 0; color: var(--text); font-size: 12px; line-height: 1.35; white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -1906,18 +1906,26 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
           ? `<strong>${displayName}</strong>`
           : `<div class="result-person-identity">${personAvatar(resultPerson)}<strong>${escapeHtml(displayName)}</strong></div>`;
         const details = teamMembers.length
-          ? `<div class="result-team-members">${teamMembers.map((member) => `<span class="result-team-member">${personAvatar(member)}<span>${member.position}. ${escapeHtml(member.name)} (${String(member.birth_year).slice(-2)})</span></span>`).join("")}</div>`
+          ? `<div class="result-team-members">${teamMembers.map((member) => {
+            const segmentIndex = lapGroups.findIndex((group) => group.includes(member.position));
+            const segmentValue = segmentIndex >= 0 ? result.segments[segmentIndex] : null;
+            const frequency = segmentIndex >= 0 ? result.frequencies?.[segmentIndex] : null;
+            return `<span class="result-team-member"><span class="result-team-person">${personAvatar(member)}<span>${member.position}. ${escapeHtml(member.name)} (${String(member.birth_year).slice(-2)})</span></span><span class="result-team-split"><strong>${Number.isInteger(segmentValue) ? formatReviewTime(segmentValue) : "–"}</strong>${Number.isInteger(frequency) ? `<small>${frequency}/min</small>` : ""}</span></span>`;
+          }).join("")}</div>`
           : `<div class="result-meta">${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}</div>`;
         const stoppedTime = result.segments.reduce((sum, value) => sum + (Number.isInteger(value) && value > 0 ? value : 0), 0);
+        const expandedDetails = teamMembers.length
+          ? (result.note ? `<details class="result-laps-details team-note-details"><summary>Notiz</summary><div class="result-feedback"><strong>Feedback</strong><p>${escapeHtml(result.note)}</p></div></details>` : "")
+          : `<details class="result-laps-details"><summary>Details <span>${result.segments.length} Runden</span></summary>${result.note ? `<div class="result-feedback"><strong>Feedback</strong><p>${escapeHtml(result.note)}</p></div>` : ""}<div class="result-segments">${result.segments.map((value, lap) => {
+            const group = lapGroups[lap] || [lap + 1];
+            const glued = group.length > 1;
+            return `<span class="${glued ? "glued-result-lap" : ""}"><span class="result-lap-label">${escapeHtml(disciplineLapGroupLabel(result.discipline, group))}${Number.isInteger(result.frequencies?.[lap]) ? `<small>${result.frequencies[lap]}/min</small>` : ""}</span><strong>${value === null ? "–" : formatTime(value)}</strong></span>`;
+          }).join("")}</div></details>`;
         return `<article class="result-card">
         <div class="result-head"><div>${resultIdentity}${details}</div>
         <button class="button secondary small icon-button edit-result" data-id="${result.id}" aria-label="Ergebnis bearbeiten" title="Bearbeiten">${icon("pencil")}</button></div>
         <div class="result-times"><div><span>Gestoppt</span><strong>${formatTime(stoppedTime)}</strong></div><div class="official"><span>Offiziell</span><strong>${result.official_centiseconds == null ? "–" : formatTime(result.official_centiseconds)}</strong></div></div>
-        <details class="result-laps-details"><summary>Details <span>${result.segments.length} Runden</span></summary>${result.note ? `<div class="result-feedback"><strong>Feedback</strong><p>${escapeHtml(result.note)}</p></div>` : ""}<div class="result-segments">${result.segments.map((value, lap) => {
-          const group = lapGroups[lap] || [lap + 1];
-          const glued = group.length > 1;
-          return `<span class="${glued ? "glued-result-lap" : ""}"><span class="result-lap-label">${escapeHtml(disciplineLapGroupLabel(result.discipline, group))}${Number.isInteger(result.frequencies?.[lap]) ? `<small>${result.frequencies[lap]}/min</small>` : ""}</span><strong>${value === null ? "–" : formatTime(value)}</strong></span>`;
-        }).join("")}</div></details>
+        ${expandedDetails}
       </article>`;
       }).join("")}</div>`;
     resultsRoot.innerHTML = `<a class="viewer-list-back" id="viewer-list-back" href="#/viewer/${id}" data-history-back>${icon("arrow-left")} Ergebnisse</a>
