@@ -1437,10 +1437,7 @@ async function renderTimer(id) {
       try {
         event.currentTarget.disabled = true;
         const assignment = item.team ? { participantIds } : { participantId: participantIds[0] };
-        const synced = await saveResultOfflineFirst(id, { ...assignment, discipline: timer.discipline, segments: corrections.segments, frequencies: corrections.frequencies, lapGroups: corrections.lapGroups, officialTime: corrections.officialTime });
-        showToast(synced
-          ? "Ergebnis wurde gespeichert. Bereit für die nächste Person."
-          : "Offline gespeichert. Wird bei Verbindung automatisch hochgeladen.");
+        await saveResultOfflineFirst(id, { ...assignment, discipline: timer.discipline, segments: corrections.segments, frequencies: corrections.frequencies, lapGroups: corrections.lapGroups, officialTime: corrections.officialTime });
         resetTimer();
       } catch (err) {
         review.querySelector("#save-error").textContent = `Ergebnis konnte nicht sicher auf diesem Gerät gespeichert werden: ${err.message}`;
@@ -1580,15 +1577,23 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
       femaleCount: counts.get(`${disciplineId}:female`) || 0,
       maleCount: counts.get(`${disciplineId}:male`) || 0,
     })).filter(({ femaleCount, maleCount }) => femaleCount > 0 || maleCount > 0);
+    const availableGroups = disciplineGroups.map((group) => ({
+      ...group,
+      entries: availableDisciplines.filter(({ item }) => item.group === group.id),
+    })).filter((group) => group.entries.length > 0);
     const resultButton = (disciplineId, item, gender, count) => count
       ? `<button class="result-choice ${gender === "female" ? "female" : "male"}" data-discipline="${disciplineId}" data-gender="${gender}" aria-label="${escapeHtml(item.name)}, ${genderName(gender)}, ${count} ${count === 1 ? "Ergebnis" : "Ergebnisse"}"><strong>${escapeHtml(item.name)}</strong><span>${genderName(gender)}</span></button>`
       : `<span class="result-choice-space" aria-hidden="true"></span>`;
     resultsRoot.innerHTML = availableDisciplines.length
-      ? `<div class="result-selection" aria-label="Ergebnisgruppen">${availableDisciplines.map(({ disciplineId, item, femaleCount, maleCount }) =>
-        item.mixed
-          ? `<div class="result-selection-row"><button class="result-choice mixed" data-discipline="${disciplineId}" data-gender="mixed" aria-label="${escapeHtml(item.name)}, Mixed, ${femaleCount + maleCount} Ergebnisse"><strong>${escapeHtml(item.name)}</strong><span>Mixed</span></button></div>`
-          : `<div class="result-selection-row">${resultButton(disciplineId, item, "female", femaleCount)}${resultButton(disciplineId, item, "male", maleCount)}</div>`
-      ).join("")}</div>`
+      ? `<div class="result-selection" aria-label="Ergebnisgruppen">${availableGroups.map((group, groupIndex) => `
+        <section class="result-selection-group" aria-labelledby="result-group-${groupIndex}">
+          <h2 id="result-group-${groupIndex}">${escapeHtml(group.name)}</h2>
+          <div class="result-selection-group-rows">${group.entries.map(({ disciplineId, item, femaleCount, maleCount }) =>
+            item.mixed
+              ? `<div class="result-selection-row"><button class="result-choice mixed" data-discipline="${disciplineId}" data-gender="mixed" aria-label="${escapeHtml(item.name)}, Mixed, ${femaleCount + maleCount} Ergebnisse"><strong>${escapeHtml(item.name)}</strong><span>Mixed</span></button></div>`
+              : `<div class="result-selection-row">${resultButton(disciplineId, item, "female", femaleCount)}${resultButton(disciplineId, item, "male", maleCount)}</div>`
+          ).join("")}</div>
+        </section>`).join("")}</div>`
       : `<div class="empty">Noch keine Ergebnisse.</div>`;
     resultsRoot.querySelectorAll(".result-choice").forEach((button) => button.addEventListener("click", () => {
       window.scrollTo(0, 0);
