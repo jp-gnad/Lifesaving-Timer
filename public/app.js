@@ -1655,26 +1655,27 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
       }).join("")}</div>`;
     const tableView = `<div class="result-table-wrap"><table class="result-table">
       <caption class="sr-only">Ergebnisse ${escapeHtml(item.name)}, ${genderName(selected.gender)}</caption>
-      <thead><tr><th>Person</th><th>Offizielle Zeit</th>${Array.from({ length: lapCount }, (_, lap) => `<th>${escapeHtml(disciplineLapLabel(selected.discipline, lap + 1))}</th>`).join("")}<th><span class="sr-only">Aktionen</span></th></tr></thead>
-      <tbody>${results.map((result, index) => {
+      <thead><tr><th>Person</th><th>Gestoppt</th><th>Offiziell</th>${Array.from({ length: lapCount }, (_, lap) => `<th title="${escapeHtml(disciplineLapLabel(selected.discipline, lap + 1))}">L${lap + 1}</th>`).join("")}<th><span class="sr-only">Aktionen</span></th></tr></thead>
+      <tbody>${results.map((result) => {
         const teamMembers = result.team_members || [];
         const lapGroups = resultLapGroups(result);
         const displayName = teamMembers.length ? "Mannschaft" : `${result.participant_name} (${String(result.birth_year).slice(-2)})`;
-        const resultPerson = { name: result.participant_name, gender: result.gender, organization: result.organization };
         const tableIdentity = teamMembers.length
-          ? `<strong>${index + 1}. Mannschaft</strong>`
-          : `<span class="table-person-identity">${personAvatar(resultPerson)}<strong>${index + 1}. ${escapeHtml(displayName)}</strong></span>`;
+          ? `<strong>Mannschaft</strong>`
+          : `<strong>${escapeHtml(displayName)}</strong>`;
         const details = teamMembers.length
-          ? `<span class="table-team-members">${teamMembers.map((member) => `<span>${personAvatar(member)}<span>${member.position}. ${escapeHtml(member.name)} (${String(member.birth_year).slice(-2)})</span></span>`).join("")}</span>`
+          ? `<span class="table-team-members">${teamMembers.map((member) => `<span>Pos. ${member.position}: ${escapeHtml(member.name)} (${String(member.birth_year).slice(-2)})</span>`).join("")}</span>`
           : `${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}`;
+        const stoppedTime = result.segments.reduce((sum, value) => sum + (Number.isInteger(value) && value > 0 ? value : 0), 0);
         return `<tr><td>${tableIdentity}<small>${details}</small></td>
+        <td class="stopped-result">${formatTime(stoppedTime)}</td>
         <td class="official-result">${result.official_centiseconds == null ? "–" : formatTime(result.official_centiseconds)}</td>
         ${result.segments.map((value, lap) => {
           const group = lapGroups[lap] || [lap + 1];
           const span = Math.max(1, group.length);
           return `<td colspan="${span}" class="${span > 1 ? "glued-result-cell" : ""}" aria-label="${escapeHtml(disciplineLapGroupLabel(result.discipline, group))}">${value ? `<span class="table-lap-value">${formatTime(value)}${Number.isInteger(result.frequencies?.[lap]) ? `<small>${result.frequencies[lap]}/min</small>` : ""}</span>` : "–"}</td>`;
         }).join("")}${Array.from({ length: Math.max(0, lapCount - lapGroups.flat().length) }, () => "<td>–</td>").join("")}
-        <td><button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis ${index + 1} löschen" title="Löschen">${icon("trash")}</button></td></tr>`;
+        <td><button class="table-delete-result delete-result" data-id="${result.id}" aria-label="Ergebnis löschen">Löschen</button></td></tr>`;
       }).join("")}</tbody>
     </table></div>`;
     resultsRoot.innerHTML = `<a class="viewer-list-back" id="viewer-list-back" href="#/viewer/${id}" data-history-back>${icon("arrow-left")} Ergebnisse</a>
