@@ -34,6 +34,48 @@ function cleanText(value, field, max = 120, required = true) {
   return text;
 }
 
+function normalizedPersonName(value = "") {
+  return String(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/ß/g, "ss")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function personIdentity(name, birthYear, gender) {
+  return `${normalizedPersonName(name)}|${birthYear}|${gender}`;
+}
+
+function eventYearOf(eventDate) {
+  const match = String(eventDate || "").match(/^(\d{4})-/);
+  return match ? Number(match[1]) : null;
+}
+
+function ageGroupFor(birthYear, eventYear) {
+  const age = eventYear - birthYear;
+  if (age < 0) throw new Error("Der Jahrgang liegt nach dem Eventjahr.");
+  if (age <= 10) return "10";
+  if (age <= 12) return "11/12";
+  if (age <= 14) return "13/14";
+  if (age <= 16) return "15/16";
+  if (age <= 18) return "17/18";
+  return "Offen";
+}
+
+function directoryCandidate(record, eventYear, importedIdentities = null) {
+  const gender = record.gender === "w" ? "female" : "male";
+  return {
+    id: record.candidate_id,
+    name: record.name,
+    birthYear: record.birth_year,
+    gender,
+    organization: record.organization || "Unbekannt",
+    ageGroup: ageGroupFor(record.birth_year, eventYear),
+    alreadyImported: importedIdentities?.has(personIdentity(record.name, record.birth_year, gender)) || false,
+  };
+}
+
 async function bodyOf(request) {
   const type = request.headers.get("content-type") || "";
   if (!type.includes("application/json")) throw new Error("JSON erwartet.");
@@ -119,6 +161,58 @@ async function handleApi(request, env) {
   }
 
   if (!(await eventExists(env.DB, eventId))) return fail("Event nicht gefunden.", 404);
+
+  if (parts[3] === "participants" && parts[4] === "import" && parts.length === 5 && method === "GET") {
+    const event = await env.DB.prepare("SELECT event_date FROM events WHERE id = ?").bind(eventId).first();
+    const eventYear = eventYearOf(event?.event_date);
+    if (!eventYear) return fail("Für den Import muss beim Event ein Datum hinterlegt sein.");
+    const query = normalizedPersonName(url.searchParams.get("q") || "");
+    if (query.length < 3) return json({ candidates: [] });
+    if (query.length > 80) throw new Error("Suchbegriff ist zu lang.");
+
+    const { results: importedPeople } = await env.DB.prepare(`
+      SELECT name, birth_year, gender FROM participants WHERE event_id = ?
+    `).bind(eventId).all();
+    const importedIdentities = new Set(importedPeople.map((person) => personIdentity(person.name, person.birth_year, person.gender)));
+    const { results: directoryMatches } = await env.DB.prepare(`
+      SELECT candidate_id, name, birth_year, gender, organization
+      FROM participant_directory
+      WHERE birth_year <= ? AND search_name LIKE ?
+      ORDER BY CASE WHEN search_name LIKE ? THEN 0 ELSE 1 END, name COLLATE NOCASE, birth_year
+      LIMIT 10
+    `).bind(eventYear, `%${query}%`, `${query}%`).all();
+    const matches = directoryMatches.map((record) => directoryCandidate(record, eventYear, importedIdentities));
+    return json({ candidates: matches });
+  }
+
+  if (parts[3] === "participants" && parts[4] === "import" && parts.length === 5 && method === "POST") {
+    const body = await bodyOf(request);
+    const candidateId = cleanText(body.candidateId, "Person", 32);
+    const record = await env.DB.prepare(`
+      SELECT candidate_id, name, birth_year, gender, organization
+      FROM participant_directory WHERE candidate_id = ?
+    `).bind(candidateId).first();
+    if (!record) return fail("Person wurde nicht gefunden.", 404);
+    const event = await env.DB.prepare("SELECT event_date FROM events WHERE id = ?").bind(eventId).first();
+    const eventYear = eventYearOf(event?.event_date);
+    if (!eventYear) return fail("Für den Import muss beim Event ein Datum hinterlegt sein.");
+    const candidate = directoryCandidate(record, eventYear);
+    const { results: comparablePeople } = await env.DB.prepare(`
+      SELECT name, birth_year, gender FROM participants
+      WHERE event_id = ? AND birth_year = ? AND gender = ?
+    `).bind(eventId, candidate.birthYear, candidate.gender).all();
+    if (comparablePeople.some((person) => personIdentity(person.name, person.birth_year, person.gender)
+      === personIdentity(candidate.name, candidate.birthYear, candidate.gender))) {
+      return fail("Diese Person ist bereits im Event vorhanden.", 409);
+    }
+
+    const id = crypto.randomUUID();
+    await env.DB.prepare(`
+      INSERT INTO participants (id, event_id, name, birth_year, age_group, gender, organization)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(id, eventId, candidate.name, candidate.birthYear, candidate.ageGroup, candidate.gender, candidate.organization).run();
+    return json({ id }, 201);
+  }
 
   if (parts[3] === "participants" && parts.length === 4 && method === "POST") {
     const body = await bodyOf(request);

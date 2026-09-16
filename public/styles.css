@@ -91,6 +91,8 @@ body.home-page .site-header, body.event-page .site-header, body.people-page .sit
 .event-page .event-action-tile:first-child { grid-column: 1 / -1; min-height: 138px; aspect-ratio: auto; }
 .people-page .container > .back, .people-page .people-page-head { flex: 0 0 auto; }
 .people-page .people-page-head { margin-bottom: 12px; }
+.people-page-actions { display: flex; align-items: center; gap: 6px; }
+.people-page-actions .button { min-height: 40px; padding: 7px 9px; font-size: 13px; }
 .people-list-section { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .person-groups { flex: 1 1 auto; min-height: 0; display: grid; align-content: start; gap: 18px; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
 .person-age-group h2 { margin: 0 0 7px; color: var(--muted); font-size: 14px; font-weight: 750; }
@@ -199,6 +201,12 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 #person-form .form-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 #person-form .form-actions .button { min-width: 0; padding-right: 8px; padding-left: 8px; font-size: 14px; }
 #person-form .dialog-delete-row .button { width: 100%; }
+.participant-import-dialog { width: min(520px, calc(100% - 16px)); height: min(680px, calc(100dvh - 32px)); overflow: hidden; }
+.participant-import-body { height: 100%; min-height: 0; display: flex; flex-direction: column; }
+.participant-import-body .dialog-title-row { flex: 0 0 auto; margin-bottom: 12px; }
+.participant-import-body .participant-search-control { flex: 0 0 auto; }
+.import-search-note { flex: 0 0 auto; min-height: 21px; margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+.participant-import-list { margin-top: 9px; }
 .result-head { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 11px; }
 .rank-badge { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: var(--surface-alt); font-weight: 800; }
 .result-person-identity { min-width: 0; display: flex; align-items: center; gap: 8px; }

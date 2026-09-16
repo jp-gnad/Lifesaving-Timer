@@ -62,7 +62,7 @@ let animationFrame = null;
 let toastTimer = null;
 
 function icon(name) {
-  return `<svg class="icon" aria-hidden="true"><use href="/icons.svg?v=participant-filters#${name}"></use></svg>`;
+  return `<svg class="icon" aria-hidden="true"><use href="/icons.svg?v=participant-import#${name}"></use></svg>`;
 }
 
 function escapeHtml(value = "") {
@@ -75,8 +75,8 @@ function normalizedIdentity(value = "") {
   return String(value)
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/ß/g, "ss")
     .toLocaleLowerCase("de-DE")
+    .replace(/ß/g, "ss")
     .replace(/[^a-z0-9]/g, "");
 }
 
@@ -394,7 +394,10 @@ async function renderPeople(id) {
   setDocumentTitle(`Personen – ${event.name}`);
   app.innerHTML = `
     <a class="back" href="#/event/${id}">${icon("arrow-left")} ${escapeHtml(event.name)}</a>
-    <div class="page-head people-page-head"><h1>Personen</h1><button class="button secondary" id="new-person">${icon("user-plus")} Hinzufügen</button></div>
+    <div class="page-head people-page-head"><h1>Personen</h1><div class="people-page-actions">
+      <button class="button secondary" id="new-person">${icon("user-plus")} Neu</button>
+      <button class="button secondary" id="import-person">${icon("import")} Importieren</button>
+    </div></div>
     <section class="people-list-section" aria-label="Personenliste">
       ${participants.length ? `<div class="person-groups">${peopleByAgeGroup.map(([ageGroup, people], groupIndex) => `<section class="person-age-group" aria-labelledby="age-group-${groupIndex}"><h2 id="age-group-${groupIndex}">${escapeHtml(ageGroup)}</h2><div class="person-list">${people.map(personCardMarkup).join("")}</div></section>`).join("")}</div>` : `<div class="empty">Noch keine Personen.</div>`}
     </section>
@@ -408,13 +411,31 @@ async function renderPeople(id) {
       </div><p class="form-error" id="person-error" role="alert"></p>
       <div class="form-actions"><button type="button" class="button secondary" data-close>Abbrechen</button><button class="button">Person speichern</button></div>
       <div class="dialog-delete-row"><button type="button" class="button danger small" id="delete-person-dialog" hidden>${icon("trash")} Person löschen</button></div>
-    </form></dialog>`;
+    </form></dialog>
+    <dialog id="person-import-dialog" class="participant-import-dialog"><div class="dialog-body participant-import-body">
+      <div class="dialog-title-row"><h2>Person importieren</h2><button type="button" class="button secondary icon-button" data-close aria-label="Schließen">${icon("x")}</button></div>
+      <div class="participant-search-control">
+        <label class="sr-only" for="import-person-search">Person suchen</label>
+        <input id="import-person-search" type="search" inputmode="search" autocomplete="off" placeholder="Name suchen …" ${event.event_date ? "" : "disabled"}>
+        <button type="button" class="participant-search-clear" id="clear-import-search" aria-label="Suche löschen" hidden>${icon("x")}</button>
+      </div>
+      <p class="import-search-note" id="import-search-note">${event.event_date ? "Mindestens 3 Buchstaben eingeben." : "Für den Import zuerst beim Event ein Datum eintragen."}</p>
+      <div class="participant-picker-list participant-import-list" id="person-import-results" aria-live="polite"></div>
+    </div></dialog>`;
 
   const dialog = document.querySelector("#person-dialog");
   const personForm = document.querySelector("#person-form");
   const personDialogTitle = document.querySelector("#person-dialog-title");
   const deletePersonButton = document.querySelector("#delete-person-dialog");
+  const importDialog = document.querySelector("#person-import-dialog");
+  const importSearch = document.querySelector("#import-person-search");
+  const clearImportSearch = document.querySelector("#clear-import-search");
+  const importSearchNote = document.querySelector("#import-search-note");
+  const importResults = document.querySelector("#person-import-results");
+  let importSearchTimer = null;
+  let importRequest = 0;
   bindDialogClose(dialog);
+  bindDialogClose(importDialog);
   document.querySelector("#new-person").addEventListener("click", () => {
     personForm.reset();
     personForm.dataset.editId = "";
@@ -422,6 +443,72 @@ async function renderPeople(id) {
     deletePersonButton.hidden = true;
     document.querySelector("#person-error").textContent = "";
     openDialog("#person-dialog");
+  });
+  document.querySelector("#import-person").addEventListener("click", () => {
+    clearTimeout(importSearchTimer);
+    importRequest += 1;
+    importSearch.value = "";
+    clearImportSearch.hidden = true;
+    importResults.innerHTML = "";
+    importSearchNote.textContent = event.event_date
+      ? "Mindestens 3 Buchstaben eingeben."
+      : "Für den Import zuerst beim Event ein Datum eintragen.";
+    openDialog("#person-import-dialog", { focusField: false });
+  });
+  const loadImportCandidates = async () => {
+    const searchValue = importSearch.value.trim();
+    const searchLength = normalizedIdentity(searchValue).length;
+    clearImportSearch.hidden = !searchValue;
+    importRequest += 1;
+    const requestId = importRequest;
+    if (searchLength < 3) {
+      importSearchNote.textContent = "Mindestens 3 Buchstaben eingeben.";
+      importResults.innerHTML = "";
+      return;
+    }
+    importSearchNote.textContent = "Suche …";
+    importResults.innerHTML = "";
+    try {
+      const { candidates } = await api(`/events/${id}/participants/import?q=${encodeURIComponent(searchValue)}`);
+      if (requestId !== importRequest) return;
+      importSearchNote.textContent = candidates.length ? `${candidates.length} Treffer` : "Keine Person gefunden.";
+      importResults.innerHTML = candidates.map((candidate) => `<button type="button" class="participant-picker-option import-person-option" data-id="${candidate.id}" ${candidate.alreadyImported ? "disabled" : ""}>
+        <span class="participant-picker-main">${personAvatar({ name: candidate.name, gender: candidate.gender, organization: candidate.organization })}<span class="participant-picker-copy">
+          <strong>${escapeHtml(candidate.name)} (${String(candidate.birthYear).slice(-2)})</strong>
+          <small>${escapeHtml(candidate.organization)} · ${escapeHtml(candidate.ageGroup)} · ${candidate.gender === "female" ? "w" : "m"}${candidate.alreadyImported ? " · Bereits vorhanden" : ""}</small>
+        </span></span>${candidate.alreadyImported ? icon("check") : icon("import")}
+      </button>`).join("");
+    } catch (err) {
+      if (requestId !== importRequest) return;
+      importSearchNote.textContent = err.message;
+    }
+  };
+  importSearch.addEventListener("input", () => {
+    clearTimeout(importSearchTimer);
+    clearImportSearch.hidden = !importSearch.value;
+    importSearchTimer = setTimeout(loadImportCandidates, 220);
+  });
+  clearImportSearch.addEventListener("click", () => {
+    clearTimeout(importSearchTimer);
+    importRequest += 1;
+    importSearch.value = "";
+    clearImportSearch.hidden = true;
+    importSearchNote.textContent = "Mindestens 3 Buchstaben eingeben.";
+    importResults.innerHTML = "";
+    importSearch.focus();
+  });
+  importResults.addEventListener("click", async (clickEvent) => {
+    const button = clickEvent.target.closest(".import-person-option");
+    if (!button || button.disabled) return;
+    try {
+      button.disabled = true;
+      await api(`/events/${id}/participants/import`, { method: "POST", body: JSON.stringify({ candidateId: button.dataset.id }) });
+      showToast("Person wurde importiert.");
+      await renderPeople(id);
+    } catch (err) {
+      button.disabled = false;
+      importSearchNote.textContent = err.message;
+    }
   });
   document.querySelectorAll(".edit-person").forEach((button) => button.addEventListener("click", () => {
     const person = participants.find((item) => item.id === button.dataset.id);

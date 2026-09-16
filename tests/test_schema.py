@@ -118,6 +118,13 @@ class SchemaTest(unittest.TestCase):
                 ("person-1", "event-1", "Test", 2000, "Offen", "other", "Teststadt"),
             )
 
+    def test_private_import_directory_is_available(self):
+        columns = {row[1] for row in self.db.execute("PRAGMA table_info(participant_directory)").fetchall()}
+        self.assertEqual(
+            columns,
+            {"candidate_id", "name", "birth_year", "gender", "organization", "search_name"},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
