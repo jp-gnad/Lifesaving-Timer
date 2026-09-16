@@ -528,7 +528,7 @@ async function renderHome() {
       <h2>Neues Event</h2>
       <div class="form-grid">
         <div class="field full"><label for="event-name">Eventname</label><input id="event-name" name="name" maxlength="120" required placeholder="z. B. Vereinsmeisterschaft 2026"></div>
-        <div class="field"><label for="event-date">Datum</label><input id="event-date" name="eventDate" type="date"></div>
+        <div class="field event-date-field"><label for="event-date">Datum</label><input id="event-date" name="eventDate" type="date"></div>
         <div class="field"><label for="event-location">Ort</label><input id="event-location" name="location" maxlength="120" placeholder="z. B. Berlin"></div>
       </div>
       <p class="form-error" id="event-error" role="alert"></p>
@@ -574,12 +574,14 @@ async function renderEvent(id) {
       <h2>Event bearbeiten</h2>
       <div class="form-grid">
         <div class="field full"><label for="edit-event-name">Eventname</label><input id="edit-event-name" name="name" maxlength="120" required value="${escapeHtml(event.name)}"></div>
-        <div class="field"><label for="edit-event-date">Datum</label><input id="edit-event-date" name="eventDate" type="date" value="${escapeHtml(event.event_date || "")}"></div>
+        <div class="field event-date-field"><label for="edit-event-date">Datum</label><input id="edit-event-date" name="eventDate" type="date" value="${escapeHtml(event.event_date || "")}"></div>
         <div class="field"><label for="edit-event-location">Ort</label><input id="edit-event-location" name="location" maxlength="120" value="${escapeHtml(event.location || "")}"></div>
       </div>
       <p class="form-error" id="event-edit-error" role="alert"></p>
-      <div class="form-actions"><button type="button" class="button secondary" data-close>Abbrechen</button><button class="button">Speichern</button></div>
-      <div class="dialog-delete-row"><button type="button" class="button danger small" id="delete-event-dialog" aria-label="Event löschen">${icon("trash")} Löschen</button></div>
+      <div class="event-edit-actions">
+        <button type="button" class="button secondary" data-close>Abbrechen</button><button class="button">Speichern</button>
+        <button type="button" class="button danger small" id="delete-event-dialog" aria-label="Event löschen">${icon("trash")} Löschen</button>
+      </div>
     </form></dialog>`;
 
   const eventDialog = document.querySelector("#event-edit-dialog");
@@ -1742,15 +1744,15 @@ async function renderRoute() {
 }
 
 window.addEventListener("hashchange", renderRoute);
-window.addEventListener("online", () => syncPendingResults().catch(() => {}));
+window.addEventListener("online", () => syncPendingResults({ includeBlocked: true }).catch(() => {}));
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") syncPendingResults().catch(() => {});
+  if (document.visibilityState === "visible") syncPendingResults({ includeBlocked: true }).catch(() => {});
 });
 offlineSyncStatus?.addEventListener("click", () => syncPendingResults({ includeBlocked: true, notify: true }).catch(() => {}));
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
 }
 updateOfflineSyncStatus()
-  .then(() => syncPendingResults())
+  .then(() => syncPendingResults({ includeBlocked: true }))
   .catch(() => {});
 renderRoute();
