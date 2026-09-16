@@ -5,18 +5,18 @@ const defaultViewport = viewportMeta.content;
 
 const disciplines = {
   normal: { name: "Normal", laps: 20, flexible: true, group: "normal" },
-  rescue50: { name: "50 m Retten", laps: 2, group: "individual" },
-  rescue100: { name: "100 m Retten", laps: 2, group: "individual" },
-  lifesaver100: { name: "100 m Lifesaver", laps: 3, group: "individual" },
-  medley100: { name: "100 m Kombi", laps: 3, group: "individual" },
-  superLifesaver200: { name: "200 m Super Lifesaver", laps: 7, group: "individual" },
-  obstacle200: { name: "200 m Hindernis", laps: 4, group: "individual" },
-  manikinRelay4x25: { name: "4 × 25 m Puppenstaffel", laps: 4, group: "team", team: true },
-  rescueTubeRelay4x50: { name: "4 × 50 m Gurtretterstaffel", laps: 4, group: "team", team: true },
-  rescueRelay4x50: { name: "4 × 50 m Rettungsstaffel", laps: 4, group: "team", team: true },
-  obstacleRelay4x50: { name: "4 × 50 m Hindernisstaffel", laps: 4, group: "team", team: true },
-  mixedRelay4x50: { name: "4 × 50 m Mixed Staffel", laps: 4, group: "team", team: true, mixed: true },
-  lineThrow: { name: "LineThrow", laps: 2, group: "team", team: true },
+  rescue50: { name: "50 m Retten", laps: 2, group: "individual", lapLabels: ["25 m Kraul", "25 m Puppe"] },
+  rescue100: { name: "100 m Retten", laps: 3, group: "individual", lapLabels: ["50 m Flossen", "10 m Aufnahme", "40 m Puppe Flossen"] },
+  lifesaver100: { name: "100 m Lifesaver", laps: 3, group: "individual", lapLabels: ["50 m Gurtretter Flossen", "10 m Einklinken", "40 m Ziehen"] },
+  medley100: { name: "100 m Kombi", laps: 3, group: "individual", lapLabels: ["50 m Kraul", "17,5 m Tauchen", "32,5 m Puppe"] },
+  superLifesaver200: { name: "200 m Super Lifesaver", laps: 7, group: "individual", lapLabels: ["50 m Kraul", "25 m Kraul", "25 m Puppe", "5 m Einklinken", "45 m Flossen Gurt", "10 m Einklinken", "40 m Ziehen"] },
+  obstacle200: { name: "200 m Hindernis", laps: 4, group: "individual", lapLabels: ["Runde 1 (50 m)", "Runde 2 (100 m)", "Runde 3 (150 m)", "Runde 4 (200 m)"] },
+  manikinRelay4x25: { name: "4 × 25 m Puppenstaffel", laps: 4, group: "team", team: true, lapLabels: ["Position 1", "Position 2", "Position 3", "Position 4"] },
+  rescueTubeRelay4x50: { name: "4 × 50 m Gurtretterstaffel", laps: 4, group: "team", team: true, lapLabels: ["50 m Kraul", "50 m Flossen", "50 m Gurt", "50 m Ziehen"] },
+  rescueRelay4x50: { name: "4 × 50 m Rettungsstaffel", laps: 4, group: "team", team: true, lapLabels: ["50 m Kraul", "50 m Flossen", "50 m Puppe", "50 m Puppe Flossen"] },
+  obstacleRelay4x50: { name: "4 × 50 m Hindernisstaffel", laps: 4, group: "team", team: true, lapLabels: ["Position 1", "Position 2", "Position 3", "Position 4"] },
+  mixedRelay4x50: { name: "4 × 50 m Mixed Staffel", laps: 4, group: "team", team: true, mixed: true, lapLabels: ["50 m Kraul", "50 m Flossen", "50 m Puppe", "50 m Puppe Flossen"] },
+  lineThrow: { name: "LineThrow", laps: 2, group: "team", team: true, lapLabels: ["12,5 m Treffen", "12,5 m Ziehen"] },
 };
 
 const disciplineGroups = [
@@ -100,12 +100,14 @@ function parseReviewTime(value) {
   return Number(match[1]) * 100 + Number(match[2]);
 }
 
-function lapRangeLabel(laps, prefix = "Lap") {
+function disciplineLapLabel(disciplineId, lapNumber) {
+  return disciplines[disciplineId]?.lapLabels?.[lapNumber - 1] || `Runde ${lapNumber}`;
+}
+
+function disciplineLapGroupLabel(disciplineId, laps) {
   const safeLaps = Array.isArray(laps) && laps.length ? laps : [];
-  if (!safeLaps.length) return prefix;
-  return safeLaps.length === 1
-    ? `${prefix} ${safeLaps[0]}`
-    : `${prefix} ${safeLaps[0]}–${safeLaps[safeLaps.length - 1]}`;
+  if (!safeLaps.length) return "Runde";
+  return safeLaps.map((lap) => disciplineLapLabel(disciplineId, lap)).join(" + ");
 }
 
 function resultLapGroups(result) {
@@ -494,15 +496,15 @@ async function renderTimer(id) {
         const time = value !== undefined
           ? formatTime(value)
           : (isCurrent ? formatTime(currentCs() - capturedTotal()) : "–");
-        return `<div class="lap-row ${isCurrent ? "current" : ""}"><span>Runde ${index + 1}</span>${lapValues(time, index, isCurrent, value === undefined && !isCurrent)}</div>`;
+        return `<div class="lap-row ${isCurrent ? "current" : ""}"><span>${escapeHtml(disciplineLapLabel(timer.discipline, index + 1))}</span>${lapValues(time, index, isCurrent, value === undefined && !isCurrent)}</div>`;
       }).join("");
       return;
     }
 
     elements["lap-list"].hidden = timer.segments.length === 0 && !hasLiveLap;
-    const liveRow = hasLiveLap ? `<div class="lap-row current"><span>Runde ${timer.segments.length + 1}</span>${lapValues(formatTime(currentCs() - capturedTotal()), timer.segments.length, true)}</div>` : "";
+    const liveRow = hasLiveLap ? `<div class="lap-row current"><span>${escapeHtml(disciplineLapLabel(timer.discipline, timer.segments.length + 1))}</span>${lapValues(formatTime(currentCs() - capturedTotal()), timer.segments.length, true)}</div>` : "";
     const completedRows = timer.segments.map((value, index) => ({ value, index })).reverse().map(({ value, index }) => {
-      return `<div class="lap-row"><span>Runde ${index + 1}</span>${lapValues(formatTime(value), index)}</div>`;
+      return `<div class="lap-row"><span>${escapeHtml(disciplineLapLabel(timer.discipline, index + 1))}</span>${lapValues(formatTime(value), index)}</div>`;
     }).join("");
     elements["lap-list"].innerHTML = liveRow + completedRows;
   }
@@ -605,9 +607,9 @@ async function renderTimer(id) {
     review.innerHTML = `<div class="review-topbar"><button class="button secondary icon-button" id="close-review" aria-label="Zurück">${icon("arrow-left")}</button><h1 id="review-title">Ergebnis prüfen</h1><button class="button danger icon-button" id="discard-review" aria-label="Messung löschen" title="Messung löschen">${icon("trash")}</button></div>
       <div class="review-content">
       <section class="review-summary" id="review-summary">
+      <button class="button secondary edit-mode-toggle" id="edit-mode" type="button">${icon("pencil")} Runden bearbeiten</button>
       <div class="review-time-summary"><div class="field stopped-time-field"><label>Gestoppte Zeit</label><div class="total-summary"><strong id="save-total" aria-live="polite">${formatTime(capturedTotal())}</strong></div></div>
       <div class="field official-time-field"><label for="official-time">Offizielle Zeit</label><input id="official-time" inputmode="decimal" placeholder="0:00,00" value="${timer.officialTime === null ? "" : formatTime(timer.officialTime)}" aria-describedby="save-error"></div></div>
-      <button class="button secondary edit-mode-toggle" id="edit-mode" type="button">${icon("pencil")} Runden bearbeiten</button>
       ${item.team ? `${assignmentMarkup}<button class="button secondary add-review-person" id="new-review-person" type="button">${icon("user-plus")} Neue Person</button>` : `<div class="review-assignment-row">${assignmentMarkup}<button class="button secondary add-review-person" id="new-review-person" type="button">${icon("user-plus")} Neu</button></div>`}
       <p class="form-error" id="save-error" role="alert"></p>
       <div class="form-actions save-actions"><button class="button" id="save-result" ${participants.length >= (item.team ? 4 : 1) ? "" : "disabled"}>${icon("save")} Ergebnis speichern</button></div></section>
@@ -671,14 +673,14 @@ async function renderTimer(id) {
         const displayedTime = !validValue
           ? ""
           : (timeMode === "segment" ? formatReviewTime(group.value) : formatCumulativeReviewTime(cumulative));
-        const range = lapRangeLabel(group.laps, "Runde");
+        const range = disciplineLapGroupLabel(timer.discipline, group.laps);
         const glueButton = glueMode && index < lapGroups.length - 1
-          ? `<button class="glue-next" type="button" data-glue-index="${index}" aria-label="${range} mit ${lapRangeLabel(lapGroups[index + 1].laps, "Runde")} verbinden" title="Mit nächster Runde verbinden">${icon("link")}</button>`
+          ? `<button class="glue-next" type="button" data-glue-index="${index}" aria-label="${escapeHtml(range)} mit ${escapeHtml(disciplineLapGroupLabel(timer.discipline, lapGroups[index + 1].laps))} verbinden" title="Mit nächster Runde verbinden">${icon("link")}</button>`
           : "";
         const values = editMode
           ? `<div class="review-lap-inputs"><label><span>${timeMode === "segment" ? "Zeit (s)" : "Kumuliert"}</span><input class="segment-input" id="segment-${index}" inputmode="decimal" value="${displayedTime}" aria-label="Zeit ${range}" aria-describedby="save-error"></label><label><span>Freq.</span><input class="frequency-input" id="frequency-${index}" inputmode="numeric" value="${Number.isInteger(group.frequency) ? group.frequency : ""}" aria-label="Frequenz ${range}" aria-describedby="save-error"></label></div>`
           : `<div class="review-lap-values"><strong>${displayedTime || "–"}</strong>${Number.isInteger(group.frequency) ? `<small>${group.frequency}/min</small>` : ""}<input class="segment-input" id="segment-${index}" type="hidden" value="${displayedTime}"><input class="frequency-input" id="frequency-${index}" type="hidden" value="${Number.isInteger(group.frequency) ? group.frequency : ""}"></div>`;
-        return `<div class="field review-lap-field ${group.laps.length > 1 ? "glued" : ""} ${editMode ? "editable" : ""}"><div class="review-lap-title"><strong>${range}</strong>${glueButton}</div>${values}</div>`;
+        return `<div class="field review-lap-field ${group.laps.length > 1 ? "glued" : ""} ${editMode ? "editable" : ""}"><div class="review-lap-title"><strong>${escapeHtml(range)}</strong>${glueButton}</div>${values}</div>`;
       }).join("");
       editTimes.querySelectorAll("input").forEach((input) => input.addEventListener("input", () => readCorrections(false)));
       editTimes.querySelectorAll(".glue-next").forEach((button) => button.addEventListener("click", () => {
@@ -1011,10 +1013,11 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
     overviewHead.hidden = true;
     setDocumentTitle(`${item.name} · ${genderName(selected.gender)} – ${event.name}`);
     const results = allResults.filter((result) => result.discipline === selected.discipline && (item.mixed || result.gender === selected.gender));
-    const lapCount = results.reduce((maximum, result) => {
+    const savedLapCount = results.reduce((maximum, result) => {
       const coveredLaps = resultLapGroups(result).flat();
       return Math.max(maximum, coveredLaps.length ? Math.max(...coveredLaps) : result.segments.length);
     }, 0);
+    const lapCount = item.flexible ? savedLapCount : item.laps;
     const cardView = `<div class="result-list">
       ${results.map((result, index) => {
         const teamMembers = result.team_members || [];
@@ -1027,28 +1030,28 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
         return `<article class="result-card">
         <div class="result-head"><span class="rank-badge">${index + 1}</span><div><strong>${escapeHtml(displayName)}</strong>${details}</div>
         <button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis ${index + 1} löschen" title="Löschen">${icon("trash")}</button></div>
-        <div class="result-times"><div><span>Gestoppt</span><strong>${formatTime(stoppedTime)}</strong></div><div class="official"><span>Offiziell</span><strong>${formatTime(result.total_centiseconds)}</strong></div></div>
+        <div class="result-times"><div><span>Gestoppt</span><strong>${formatTime(stoppedTime)}</strong></div><div class="official"><span>Offiziell</span><strong>${result.official_centiseconds == null ? "–" : formatTime(result.official_centiseconds)}</strong></div></div>
         <div class="result-segments">${result.segments.map((value, lap) => {
           const group = lapGroups[lap] || [lap + 1];
           const glued = group.length > 1;
-          return `<span class="${glued ? "glued-result-lap" : ""}"><span class="result-lap-label">${lapRangeLabel(group)}${Number.isInteger(result.frequencies?.[lap]) ? `<small>${result.frequencies[lap]}/min</small>` : ""}</span><strong>${value === null ? "–" : formatTime(value)}</strong></span>`;
+          return `<span class="${glued ? "glued-result-lap" : ""}"><span class="result-lap-label">${escapeHtml(disciplineLapGroupLabel(result.discipline, group))}${Number.isInteger(result.frequencies?.[lap]) ? `<small>${result.frequencies[lap]}/min</small>` : ""}</span><strong>${value === null ? "–" : formatTime(value)}</strong></span>`;
         }).join("")}</div>
       </article>`;
       }).join("")}</div>`;
     const tableView = `<div class="result-table-wrap"><table class="result-table">
       <caption class="sr-only">Ergebnisse ${escapeHtml(item.name)}, ${genderName(selected.gender)}</caption>
-      <thead><tr><th>Person</th><th>Offizielle Zeit</th>${Array.from({ length: lapCount }, (_, lap) => `<th>Lap ${lap + 1}</th>`).join("")}<th><span class="sr-only">Aktionen</span></th></tr></thead>
+      <thead><tr><th>Person</th><th>Offizielle Zeit</th>${Array.from({ length: lapCount }, (_, lap) => `<th>${escapeHtml(disciplineLapLabel(selected.discipline, lap + 1))}</th>`).join("")}<th><span class="sr-only">Aktionen</span></th></tr></thead>
       <tbody>${results.map((result, index) => {
         const teamMembers = result.team_members || [];
         const lapGroups = resultLapGroups(result);
         const displayName = teamMembers.length ? "Mannschaft" : `${result.participant_name} (${String(result.birth_year).slice(-2)})`;
         const details = teamMembers.length ? teamMembers.map((member) => `${member.position}. ${escapeHtml(member.name)} (${String(member.birth_year).slice(-2)})`).join("<br>") : `${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}`;
         return `<tr><td><strong>${index + 1}. ${escapeHtml(displayName)}</strong><small>${details}</small></td>
-        <td class="official-result">${formatTime(result.total_centiseconds)}</td>
+        <td class="official-result">${result.official_centiseconds == null ? "–" : formatTime(result.official_centiseconds)}</td>
         ${result.segments.map((value, lap) => {
           const group = lapGroups[lap] || [lap + 1];
           const span = Math.max(1, group.length);
-          return `<td colspan="${span}" class="${span > 1 ? "glued-result-cell" : ""}" aria-label="${lapRangeLabel(group)}">${value ? `<span class="table-lap-value">${formatTime(value)}${Number.isInteger(result.frequencies?.[lap]) ? `<small>${result.frequencies[lap]}/min</small>` : ""}</span>` : "–"}</td>`;
+          return `<td colspan="${span}" class="${span > 1 ? "glued-result-cell" : ""}" aria-label="${escapeHtml(disciplineLapGroupLabel(result.discipline, group))}">${value ? `<span class="table-lap-value">${formatTime(value)}${Number.isInteger(result.frequencies?.[lap]) ? `<small>${result.frequencies[lap]}/min</small>` : ""}</span>` : "–"}</td>`;
         }).join("")}${Array.from({ length: Math.max(0, lapCount - lapGroups.flat().length) }, () => "<td>–</td>").join("")}
         <td><button class="button danger small icon-button delete-result" data-id="${result.id}" aria-label="Ergebnis ${index + 1} löschen" title="Löschen">${icon("trash")}</button></td></tr>`;
       }).join("")}</tbody>

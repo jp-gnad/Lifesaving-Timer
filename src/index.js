@@ -1,7 +1,7 @@
 const DISCIPLINES = Object.freeze({
   normal: { laps: 20, flexible: true },
   rescue50: { laps: 2 },
-  rescue100: { laps: 2 },
+  rescue100: { laps: 3 },
   lifesaver100: { laps: 3 },
   medley100: { laps: 3 },
   superLifesaver200: { laps: 7 },
@@ -183,7 +183,7 @@ async function handleApi(request, env) {
       SELECT r.*, p.name AS participant_name, p.birth_year, p.age_group, p.gender, p.organization
       FROM results r JOIN participants p ON p.id = r.participant_id
       WHERE ${conditions.join(" AND ")}
-      ORDER BY r.total_centiseconds ASC, r.created_at ASC
+      ORDER BY COALESCE(r.official_centiseconds, r.total_centiseconds) ASC, r.created_at ASC
     `).bind(...bindings).all();
     const { results: memberRows } = await env.DB.prepare(`
       SELECT rm.result_id, rm.position, p.id, p.name, p.birth_year, p.age_group, p.gender, p.organization
@@ -246,14 +246,14 @@ async function handleApi(request, env) {
       throw new Error("Frequenzen müssen ganze Zahlen von 1 bis 999 sein.");
     }
     const segmentTotal = segments.reduce((sum, value) => sum + (value || 0), 0);
-    const officialTime = body.officialTime == null ? segmentTotal : Number(body.officialTime);
-    if (!Number.isInteger(officialTime) || officialTime <= 0) throw new Error("Ungültige offizielle Zeit.");
-    if (officialTime > 86_400_000) throw new Error("Zeit ist zu lang.");
+    const officialTime = body.officialTime == null ? null : Number(body.officialTime);
+    if (officialTime !== null && (!Number.isInteger(officialTime) || officialTime <= 0)) throw new Error("Ungültige offizielle Zeit.");
+    if (officialTime !== null && officialTime > 86_400_000) throw new Error("Zeit ist zu lang.");
     const id = crypto.randomUUID();
     const resultInsert = env.DB.prepare(`
-      INSERT INTO results (id, event_id, participant_id, discipline, total_centiseconds, segments_json, frequencies_json, lap_groups_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(id, eventId, participantIds[0], body.discipline, officialTime, JSON.stringify(segments), JSON.stringify(frequencies), JSON.stringify(lapGroups));
+      INSERT INTO results (id, event_id, participant_id, discipline, total_centiseconds, official_centiseconds, segments_json, frequencies_json, lap_groups_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(id, eventId, participantIds[0], body.discipline, segmentTotal, officialTime, JSON.stringify(segments), JSON.stringify(frequencies), JSON.stringify(lapGroups));
     if (discipline.team) {
       await env.DB.batch([resultInsert, ...participantIds.map((participantId, index) => env.DB.prepare(`
         INSERT INTO result_members (result_id, participant_id, position) VALUES (?, ?, ?)
@@ -261,7 +261,7 @@ async function handleApi(request, env) {
     } else {
       await resultInsert.run();
     }
-    return json({ id, totalCentiseconds: officialTime }, 201);
+    return json({ id, totalCentiseconds: segmentTotal, officialCentiseconds: officialTime }, 201);
   }
 
   if (parts[3] === "results" && parts[4] && parts.length === 5 && method === "DELETE") {

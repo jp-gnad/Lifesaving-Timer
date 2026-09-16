@@ -37,6 +37,11 @@ class SchemaTest(unittest.TestCase):
         ).fetchone()
         self.assertEqual(saved, (6400, "[3100,3254]", "[60,48]", "[[1],[2]]"))
 
+    def test_official_time_can_be_empty(self):
+        columns = {row[1]: row for row in self.db.execute("PRAGMA table_info(results)").fetchall()}
+        self.assertIn("official_centiseconds", columns)
+        self.assertEqual(columns["official_centiseconds"][3], 0)
+
     def test_glued_adjacent_laps_can_be_saved(self):
         self.db.execute("INSERT INTO events (id, name) VALUES (?, ?)", ("event-1", "Testevent"))
         self.db.execute(
