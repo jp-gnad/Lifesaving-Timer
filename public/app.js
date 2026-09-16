@@ -89,9 +89,21 @@ function formatCumulativeReviewTime(centiseconds) {
 }
 
 function parseTime(value) {
-  const match = String(value).trim().match(/^(\d{1,3}):([0-5]\d)[,.](\d{2})$/);
-  if (!match) return null;
-  return Number(match[1]) * 6000 + Number(match[2]) * 100 + Number(match[3]);
+  const text = String(value).trim();
+  const formatted = text.match(/^(\d{1,3}):([0-5]\d)[,.](\d{2})$/);
+  if (formatted) {
+    return Number(formatted[1]) * 6000 + Number(formatted[2]) * 100 + Number(formatted[3]);
+  }
+
+  // Mobile number keyboards often do not offer a colon. In the compact form,
+  // the last two digits before the comma are seconds: 123,45 -> 1:23,45.
+  const compact = text.match(/^(\d{1,5})[,.](\d{2})$/);
+  if (!compact) return null;
+  const digits = compact[1];
+  const minutes = digits.length > 2 ? Number(digits.slice(0, -2)) : 0;
+  const seconds = Number(digits.length > 2 ? digits.slice(-2) : digits);
+  if (seconds > 59) return null;
+  return minutes * 6000 + seconds * 100 + Number(compact[2]);
 }
 
 function parseReviewTime(value) {
@@ -609,7 +621,7 @@ async function renderTimer(id) {
       <section class="review-summary" id="review-summary">
       <button class="button secondary edit-mode-toggle" id="edit-mode" type="button">${icon("pencil")} Runden bearbeiten</button>
       <div class="review-time-summary"><div class="field stopped-time-field"><label>Gestoppte Zeit</label><div class="total-summary"><strong id="save-total" aria-live="polite">${formatTime(capturedTotal())}</strong></div></div>
-      <div class="field official-time-field"><label for="official-time">Offizielle Zeit</label><input id="official-time" inputmode="decimal" placeholder="0:00,00" value="${timer.officialTime === null ? "" : formatTime(timer.officialTime)}" aria-describedby="save-error"></div></div>
+      <div class="field official-time-field"><label for="official-time">Offizielle Zeit</label><input id="official-time" inputmode="decimal" enterkeyhint="done" placeholder="z. B. 123,45" value="${timer.officialTime === null ? "" : formatTime(timer.officialTime)}" aria-describedby="save-error"></div></div>
       ${item.team ? `${assignmentMarkup}<button class="button secondary add-review-person" id="new-review-person" type="button">${icon("user-plus")} Neue Person</button>` : `<div class="review-assignment-row">${assignmentMarkup}<button class="button secondary add-review-person" id="new-review-person" type="button">${icon("user-plus")} Neu</button></div>`}
       <p class="form-error" id="save-error" role="alert"></p>
       <div class="form-actions save-actions"><button class="button" id="save-result" ${participants.length >= (item.team ? 4 : 1) ? "" : "disabled"}>${icon("save")} Ergebnis speichern</button></div></section>
@@ -678,11 +690,17 @@ async function renderTimer(id) {
           ? `<button class="glue-next" type="button" data-glue-index="${index}" aria-label="${escapeHtml(range)} mit ${escapeHtml(disciplineLapGroupLabel(timer.discipline, lapGroups[index + 1].laps))} verbinden" title="Mit nächster Runde verbinden">${icon("link")}</button>`
           : "";
         const values = editMode
-          ? `<div class="review-lap-inputs"><label><span>${timeMode === "segment" ? "Zeit (s)" : "Kumuliert"}</span><input class="segment-input" id="segment-${index}" inputmode="decimal" value="${displayedTime}" aria-label="Zeit ${range}" aria-describedby="save-error"></label><label><span>Freq.</span><input class="frequency-input" id="frequency-${index}" inputmode="numeric" value="${Number.isInteger(group.frequency) ? group.frequency : ""}" aria-label="Frequenz ${range}" aria-describedby="save-error"></label></div>`
+          ? `<div class="review-lap-inputs"><label><span>${timeMode === "segment" ? "Zeit (s)" : "Kumuliert"}</span><input class="segment-input" id="segment-${index}" inputmode="decimal" enterkeyhint="next" value="${displayedTime}" aria-label="Zeit ${range}" aria-describedby="save-error"></label><label><span>Freq.</span><input class="frequency-input" id="frequency-${index}" inputmode="numeric" value="${Number.isInteger(group.frequency) ? group.frequency : ""}" aria-label="Frequenz ${range}" aria-describedby="save-error"></label></div>`
           : `<div class="review-lap-values"><strong>${displayedTime || "–"}</strong>${Number.isInteger(group.frequency) ? `<small>${group.frequency}/min</small>` : ""}<input class="segment-input" id="segment-${index}" type="hidden" value="${displayedTime}"><input class="frequency-input" id="frequency-${index}" type="hidden" value="${Number.isInteger(group.frequency) ? group.frequency : ""}"></div>`;
         return `<div class="field review-lap-field ${group.laps.length > 1 ? "glued" : ""} ${editMode ? "editable" : ""}"><div class="review-lap-title"><strong>${escapeHtml(range)}</strong>${glueButton}</div>${values}</div>`;
       }).join("");
       editTimes.querySelectorAll("input").forEach((input) => input.addEventListener("input", () => readCorrections(false)));
+      editTimes.querySelectorAll(".segment-input").forEach((input) => input.addEventListener("blur", () => {
+        if (timeMode !== "cumulative" || !input.value.trim()) return;
+        const parsed = parseTime(input.value);
+        if (parsed !== null) input.value = formatCumulativeReviewTime(parsed);
+        readCorrections(false);
+      }));
       editTimes.querySelectorAll(".glue-next").forEach((button) => button.addEventListener("click", () => {
         syncLapGroupsFromInputs();
         const index = Number(button.dataset.glueIndex);
@@ -722,9 +740,9 @@ async function renderTimer(id) {
         ? (invalidSegments || missingSegments
           ? (timeMode === "segment"
             ? "Abschnittszeiten bitte als Sekunden, z. B. 61,00, eingeben. Leere Runden sind erlaubt."
-            : "Kumulierte Zeiten bitte aufsteigend im Format m:ss,00 eingeben. Leere Runden sind erlaubt.")
+            : "Kumulierte Zeiten als m:ss,00 oder ohne Doppelpunkt als mss,00 eingeben. Leere Runden sind erlaubt.")
           : (invalidOfficialTime
-            ? "Bitte die offizielle Zeit im Format m:ss,00 eingeben."
+            ? "Bitte m:ss,00 oder ohne Doppelpunkt mss,00 eingeben."
             : (invalidFrequencies ? "Frequenzen bitte als ganze Zahl von 1 bis 999 eingeben." : "")))
         : "";
       return invalidSegments || missingSegments || invalidOfficialTime || invalidFrequencies ? null : {
@@ -783,6 +801,12 @@ async function renderTimer(id) {
       readCorrections(false);
     });
     officialInput.addEventListener("input", () => readCorrections(false));
+    officialInput.addEventListener("blur", () => {
+      if (!officialInput.value.trim()) return;
+      const parsed = parseTime(officialInput.value);
+      if (parsed !== null) officialInput.value = formatTime(parsed);
+      readCorrections(false);
+    });
     bindDialogClose(personDialog);
     review.querySelector("#new-review-person").addEventListener("click", () => {
       personForm.reset();
@@ -903,6 +927,10 @@ async function renderTimer(id) {
       return;
     }
     if (event.clientY < document.documentElement.clientHeight / 2) return;
+    if (timer.segments.length >= config().laps - 1) {
+      elements["right-action"].click();
+      return;
+    }
     if (!addSegment()) return;
     updateControls();
   });

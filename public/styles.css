@@ -376,7 +376,7 @@ body.timer-page.review-active { position: fixed; inset: 0; width: 100%; height: 
 .timer-page .team-assignment legend { margin-bottom: 3px; }
 .timer-page .add-review-person { min-height: 40px; margin-top: 7px; }
 .timer-page .review-assignment-row .add-review-person { height: 40px; margin-top: 0; }
-.timer-page .save-actions { margin-top: 8px; }
+.timer-page .review-summary > .save-actions { margin-top: auto; padding-top: clamp(28px, 6vh, 52px); }
 .timer-page #save-error:empty { display: none; }
 .timer-page label { color: #172033; }
 .timer-page input, .timer-page select { border-color: #d8dde7; background: #fff; color: #172033; }
