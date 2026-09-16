@@ -388,8 +388,8 @@ function createResultsPdf(title, subtitle, headers, rows) {
   const pageHeight = 595.28;
   const margin = 28;
   const titleHeight = 42;
-  const headerHeight = 36;
-  const rowHeight = 27;
+  const headerHeight = 26;
+  const rowHeight = 23;
   const rowsPerPage = Math.max(1, Math.floor((pageHeight - (margin * 2) - titleHeight - headerHeight) / rowHeight));
   const pageRows = [];
   for (let index = 0; index < rows.length; index += rowsPerPage) pageRows.push(rows.slice(index, index + rowsPerPage));
@@ -442,10 +442,10 @@ function createResultsPdf(title, subtitle, headers, rows) {
       const mainX = textStart(mainText, x, width, headerMainSize, centered);
       commands.push(`0.93 g ${x.toFixed(2)} ${(top - headerHeight).toFixed(2)} ${width.toFixed(2)} ${headerHeight} re f`);
       commands.push(`0 g 0 G ${x.toFixed(2)} ${(top - headerHeight).toFixed(2)} ${width.toFixed(2)} ${headerHeight} re S`);
-      commands.push(`0 g BT /F2 ${headerMainSize} Tf ${mainX.toFixed(2)} ${(top - (secondaryText ? 14 : 22)).toFixed(2)} Td (${pdfEscapedText(mainText)}) Tj ET`);
+      commands.push(`0 g BT /F2 ${headerMainSize} Tf ${mainX.toFixed(2)} ${(top - (secondaryText ? 11 : 16)).toFixed(2)} Td (${pdfEscapedText(mainText)}) Tj ET`);
       if (secondaryText) {
         const secondaryX = textStart(secondaryText, x, width, headerSecondarySize, centered);
-        commands.push(`0.35 g BT /F1 ${headerSecondarySize} Tf ${secondaryX.toFixed(2)} ${(top - 27).toFixed(2)} Td (${pdfEscapedText(secondaryText)}) Tj ET`);
+        commands.push(`0.35 g BT /F1 ${headerSecondarySize} Tf ${secondaryX.toFixed(2)} ${(top - 20).toFixed(2)} Td (${pdfEscapedText(secondaryText)}) Tj ET`);
       }
       x += width;
     });
@@ -466,13 +466,13 @@ function createResultsPdf(title, subtitle, headers, rows) {
         const mainText = truncate(value.main, width);
         const mainX = textStart(mainText, x, width, fontSize, centered);
         commands.push(`0 G ${x.toFixed(2)} ${(top - rowHeight).toFixed(2)} ${width.toFixed(2)} ${rowHeight} re S`);
-        commands.push(`0 g BT /${value.bold ? "F2" : "F1"} ${fontSize} Tf ${mainX.toFixed(2)} ${(top - (hasSecondary ? 11 : 17)).toFixed(2)} Td (${pdfEscapedText(mainText)}) Tj ET`);
+        commands.push(`0 g BT /${value.bold ? "F2" : "F1"} ${fontSize} Tf ${mainX.toFixed(2)} ${(top - (hasSecondary ? 9.5 : 14.5)).toFixed(2)} Td (${pdfEscapedText(mainText)}) Tj ET`);
         if (hasSecondary) {
           const secondarySize = Math.max(5, fontSize - 1.5);
           const secondaryText = truncate(value.secondary, width, secondarySize);
           const secondaryX = textStart(secondaryText, x, width, secondarySize, centered);
           commands.push(value.tone === "frequency" ? "0.58 0.38 0 rg" : "0.48 g");
-          commands.push(`BT /F1 ${secondarySize} Tf ${secondaryX.toFixed(2)} ${(top - 21).toFixed(2)} Td (${pdfEscapedText(secondaryText)}) Tj ET`);
+          commands.push(`BT /F1 ${secondarySize} Tf ${secondaryX.toFixed(2)} ${(top - 17.5).toFixed(2)} Td (${pdfEscapedText(secondaryText)}) Tj ET`);
           commands.push("0 g");
         }
         x += width;
@@ -1925,10 +1925,7 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
       const headers = [
         "Name",
         "AK",
-        ...Array.from({ length: lapCount }, (_, lap) => ({
-          main: `Lap ${lap + 1}`,
-          secondary: disciplineLapLabel(selected.discipline, lap + 1),
-        })),
+        ...Array.from({ length: lapCount }, (_, lap) => disciplineLapLabel(selected.discipline, lap + 1)),
         "Gesamtzeit",
       ];
       const rows = results.map((result) => {
