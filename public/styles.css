@@ -422,7 +422,10 @@ body.timer-page.review-active { position: fixed; inset: 0; width: 100%; height: 
 .timer-page .review-topbar .button { width: 40px; min-height: 40px; border: 0; border-radius: 50%; padding: 0; background: transparent; color: #0a84ff; }
 .timer-page .review-topbar .button.danger { color: #d92d20; }
 .timer-page .review-content { flex: 1 1 auto; min-height: 0; overflow-y: hidden; overscroll-behavior: contain; padding: 8px 0 max(12px, env(safe-area-inset-bottom)); }
-.timer-page .review-view.normal-review .review-content { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.timer-page .review-view.normal-review .review-content { overflow-y: hidden; }
+.timer-page .review-view.normal-review .review-editor:not([hidden]) { height: 100%; min-height: 0; display: flex; flex-direction: column; }
+.timer-page .review-view.normal-review .review-tools, .timer-page .review-view.normal-review .glue-hint { flex: 0 0 auto; }
+.timer-page .review-view.normal-review .edit-times { flex: 1 1 auto; min-height: 0; align-content: start; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; margin-bottom: 0; padding-bottom: 12px; }
 .timer-page .review-content .field { min-width: 0; gap: 4px; }
 .timer-page .review-content input, .timer-page .review-content select { min-width: 0; min-height: 40px; padding: 7px 9px; text-overflow: ellipsis; }
 .timer-page .edit-times { gap: 6px 8px; margin-bottom: 19px; }

@@ -100,6 +100,12 @@ function personInitials(name = "") {
   }).join("") || "?";
 }
 
+function compareParticipantsByOrganization(left, right) {
+  const options = { numeric: true, sensitivity: "base" };
+  const organizationOrder = String(left?.organization || "").localeCompare(String(right?.organization || ""), "de", options);
+  return organizationOrder || String(left?.name || "").localeCompare(String(right?.name || ""), "de", options);
+}
+
 function personAvatar(person) {
   const initials = personInitials(person?.name);
   const capUrl = organizationCapUrl(person?.organization);
@@ -305,6 +311,7 @@ async function renderHome() {
 
 async function renderEvent(id) {
   const { event, participants } = await api(`/events/${id}`);
+  participants.sort(compareParticipantsByOrganization);
   setDocumentTitle(event.name);
   app.innerHTML = `
     <a class="back" href="#/">${icon("arrow-left")} Events</a>
@@ -438,6 +445,7 @@ async function renderEvent(id) {
 
 async function renderTimer(id) {
   const { event, participants } = await api(`/events/${id}`);
+  participants.sort(compareParticipantsByOrganization);
   setDocumentTitle(`Timer – ${event.name}`);
   const timer = {
     status: "idle",
@@ -779,7 +787,7 @@ async function renderTimer(id) {
         .filter((person) => !ageGroup || person.age_group === ageGroup)
         .filter((person) => !query || [person.name, person.organization, person.age_group, person.birth_year]
           .some((value) => String(value).toLocaleLowerCase("de-DE").includes(query)))
-        .sort((left, right) => left.name.localeCompare(right.name, "de", { numeric: true, sensitivity: "base" }));
+        .sort(compareParticipantsByOrganization);
       participantPickerList.innerHTML = matches.map((person) => {
         const assignedElsewhere = participantSelects.find((select) => select !== activeParticipantSelect && select.value === person.id);
         const selected = activeParticipantSelect?.value === person.id;
@@ -1024,6 +1032,7 @@ async function renderTimer(id) {
         const created = await api(`/events/${id}/participants`, { method: "POST", body: JSON.stringify(values) });
         const person = { id: created.id, name: values.name, birth_year: Number(values.birthYear), age_group: values.ageGroup, gender: values.gender, organization: values.organization };
         participants.push(person);
+        participants.sort(compareParticipantsByOrganization);
         participantSelects.forEach((select) => {
           const option = document.createElement("option");
           option.value = person.id;
