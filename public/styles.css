@@ -96,10 +96,10 @@ body.viewer-overview .site-header { height: calc(58px + env(safe-area-inset-top)
 .viewer-overview .container { height: calc(100dvh - 58px - env(safe-area-inset-top)); min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
 .viewer-overview #viewer-overview-head { flex: 0 0 auto; }
 .viewer-overview #results { flex: 1 1 auto; min-height: 0; overflow: hidden; }
-.viewer-overview .result-selection { height: 100%; min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
-.viewer-overview .result-selection-group-rows { min-height: 0; grid-auto-rows: minmax(0, 1fr); }
-.viewer-overview .result-selection-row { min-height: 0; }
-.viewer-overview .result-choice, .viewer-overview .result-choice-space { height: 100%; min-height: 0; }
+.viewer-overview .result-selection { min-height: 0; align-content: start; }
+.viewer-overview .result-selection-group-rows { min-height: 0; align-content: start; }
+.viewer-overview .result-selection-row { height: 58px; }
+.viewer-overview .result-choice, .viewer-overview .result-choice-space { height: 58px; min-height: 58px; }
 .home-page .container > .page-head { flex: 0 0 auto; }
 .home-page .event-list-section { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
 .event-page .container > .back, .event-page .event-page-head, .event-page .event-action-grid { flex: 0 0 auto; }
@@ -597,6 +597,7 @@ body.timer-page.review-active { position: fixed; inset: 0; width: 100%; height: 
   .result-selection, .result-selection-group-rows, .result-selection-row { gap: 6px; }
   .result-choice { min-height: 56px; }
   .result-choice-space { min-height: 56px; }
+  .viewer-overview .result-selection-row, .viewer-overview .result-choice, .viewer-overview .result-choice-space { height: 56px; min-height: 56px; }
   .viewer-list-heading { align-items: stretch; flex-direction: column; }
   .result-view-toggle { width: 100%; }
 }
