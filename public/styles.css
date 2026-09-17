@@ -89,8 +89,17 @@ h3 { font-size: 17px; }
 .event-page .event-summary { margin-top: 8px; }
 .event-page .event-page-head { margin-bottom: 38px; }
 body.home-page, body.event-page, body.people-page { height: 100dvh; overflow: hidden; overscroll-behavior: none; }
+body.viewer-overview { height: 100dvh; overflow: hidden; overscroll-behavior: none; }
 body.home-page .site-header, body.event-page .site-header, body.people-page .site-header { height: calc(58px + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); }
+body.viewer-overview .site-header { height: calc(58px + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); }
 .home-page .container, .event-page .container, .people-page .container { height: calc(100dvh - 58px - env(safe-area-inset-top)); min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+.viewer-overview .container { height: calc(100dvh - 58px - env(safe-area-inset-top)); min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+.viewer-overview #viewer-overview-head { flex: 0 0 auto; }
+.viewer-overview #results { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.viewer-overview .result-selection { height: 100%; min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
+.viewer-overview .result-selection-group-rows { min-height: 0; grid-auto-rows: minmax(0, 1fr); }
+.viewer-overview .result-selection-row { min-height: 0; }
+.viewer-overview .result-choice, .viewer-overview .result-choice-space { height: 100%; min-height: 0; }
 .home-page .container > .page-head { flex: 0 0 auto; }
 .home-page .event-list-section { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
 .event-page .container > .back, .event-page .event-page-head, .event-page .event-action-grid { flex: 0 0 auto; }
@@ -565,8 +574,8 @@ body.timer-page.review-active { position: fixed; inset: 0; width: 100%; height: 
 @media (max-width: 430px) {
   .site-header { height: 52px; }
   .container { padding-top: 12px; }
-  body.home-page .site-header, body.event-page .site-header, body.people-page .site-header { height: calc(52px + env(safe-area-inset-top)); }
-  .home-page .container, .event-page .container, .people-page .container { height: calc(100dvh - 52px - env(safe-area-inset-top)); }
+  body.home-page .site-header, body.event-page .site-header, body.people-page .site-header, body.viewer-overview .site-header { height: calc(52px + env(safe-area-inset-top)); }
+  .home-page .container, .event-page .container, .people-page .container, .viewer-overview .container { height: calc(100dvh - 52px - env(safe-area-inset-top)); }
   h1 { font-size: 24px; }
   .page-head { margin-bottom: 10px; }
   .back { margin-bottom: 7px; font-size: 13px; }

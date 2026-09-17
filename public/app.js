@@ -1973,6 +1973,7 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
   }
 
   function renderSelection() {
+    document.body.classList.add("viewer-overview");
     overviewHead.hidden = false;
     setDocumentTitle(`Ergebnisse – ${event.name}`);
     const counts = new Map();
@@ -2255,6 +2256,7 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
   });
 
   function renderResultList() {
+    document.body.classList.remove("viewer-overview");
     const item = disciplines[selected.discipline];
     overviewHead.hidden = true;
     setDocumentTitle(`${item.name} · ${genderName(selected.gender)} – ${event.name}`);
@@ -2408,6 +2410,7 @@ async function renderRoute() {
   document.body.classList.toggle("event-page", current.page === "event");
   document.body.classList.toggle("people-page", current.page === "people");
   document.body.classList.toggle("viewer-page", current.page === "viewer");
+  document.body.classList.remove("viewer-overview");
   setReviewInteractionLock(false);
   setTimerInteractionLock(false);
   try {
