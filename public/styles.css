@@ -234,7 +234,10 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 .result-person-identity .person-avatar { width: 30px; height: 30px; }
 .result-meta { margin-top: 2px; color: var(--muted); font-size: 13px; }
 .result-team-members { display: grid; gap: 1px; margin-top: 4px; color: var(--muted); font-size: 12px; }
-.result-team-member { min-width: 0; min-height: 27px; display: flex; align-items: center; justify-content: space-between; gap: 9px; }
+.result-team-group { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 9px; border-radius: 7px; }
+.result-team-group.glued { margin: 2px 0; padding: 3px 6px; border: 1px solid #c6d4e8; background: #f7faff; }
+.result-team-group-people { min-width: 0; display: grid; gap: 1px; }
+.result-team-member { min-width: 0; min-height: 27px; display: flex; align-items: center; }
 .result-team-person { min-width: 0; display: flex; align-items: center; gap: 6px; }
 .result-team-person > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .result-team-member .person-avatar { width: 22px; height: 22px; font-size: 8px; }

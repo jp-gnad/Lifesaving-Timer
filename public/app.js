@@ -10,7 +10,7 @@ const offlineDatabaseVersion = 1;
 const pendingResultsStore = "pendingResults";
 
 const disciplines = {
-  normal: { name: "Normal", laps: 20, flexible: true, group: "normal" },
+  normal: { name: "Benutzerdefiniert", laps: 20, flexible: true, group: "normal" },
   rescue50: { name: "50 m Retten", laps: 2, group: "individual", lapLabels: ["25 m Kraul", "25 m Puppe"] },
   rescue100: { name: "100 m Retten", laps: 3, group: "individual", lapLabels: ["50 m Flossen", "10 m Aufnahme", "40 m Puppe Flossen"] },
   lifesaver100: { name: "100 m Lifesaver", laps: 3, group: "individual", lapLabels: ["50 m Gurtretter Flossen", "10 m Einklinken", "40 m Ziehen"] },
@@ -26,7 +26,7 @@ const disciplines = {
 };
 
 const disciplineGroups = [
-  { id: "normal", name: "Normal" },
+  { id: "normal", name: "Benutzerdefiniert" },
   { id: "individual", name: "Einzel" },
   { id: "team", name: "Mannschaft" },
 ];
@@ -1077,7 +1077,7 @@ async function renderTimer(id) {
       <div id="timer-view">
       <div class="timer-topbar">
         <a class="button secondary icon-button" href="#/event/${id}" data-history-back aria-label="Eine Ansicht zurück">${icon("arrow-left")}</a>
-        <button class="mode-button" id="mode-button" aria-haspopup="dialog"><span><strong id="mode-name">Normal</strong><small id="mode-laps">max. 20 Laps</small></span>${icon("chevron-down")}</button>
+        <button class="mode-button" id="mode-button" aria-haspopup="dialog"><span><strong id="mode-name">Benutzerdefiniert</strong><small id="mode-laps">max. 20 Laps</small></span>${icon("chevron-down")}</button>
       </div>
       <section class="card clock-card" aria-label="Stoppuhr">
         <div class="clock-status" id="clock-status">Bereit</div><div class="clock" id="clock" aria-live="off">0:00,00</div>
@@ -1341,7 +1341,7 @@ async function renderTimer(id) {
       <p class="form-error" id="save-error" role="alert"></p>
       <div class="form-actions save-actions"><button class="button" id="save-result" ${participants.length >= (item.team ? 4 : 1) ? "" : "disabled"}>${icon("save")} Ergebnis speichern</button></div></section>
       <section class="review-editor" id="review-editor" hidden>
-        <div class="review-tools"><div class="time-mode-toggle" role="group" aria-label="Zeitdarstellung"><button type="button" class="active" data-time-mode="segment" aria-pressed="true">Sekunden</button><button type="button" data-time-mode="cumulative" aria-pressed="false">Kumuliert</button></div><div class="review-mode-actions"><button class="button secondary small glue-mode-toggle" id="glue-mode" type="button" aria-pressed="false">${icon("link")} Kleben</button><button class="button secondary small" id="finish-edit" type="button">${icon("check")} Fertig</button></div></div>
+        <div class="review-tools"><div class="time-mode-toggle" role="group" aria-label="Zeitdarstellung"><button type="button" class="active" data-time-mode="segment" aria-pressed="true">Sekunden</button><button type="button" data-time-mode="cumulative" aria-pressed="false">Kumuliert</button></div><div class="review-mode-actions"><button class="button secondary small glue-mode-toggle" id="glue-mode" type="button" aria-pressed="false">${icon("link")} Link</button><button class="button secondary small" id="finish-edit" type="button">${icon("check")} Fertig</button></div></div>
         <div class="glue-hint" id="glue-hint" hidden><span>Benachbarte Runden über das Kettensymbol verbinden.</span><button class="button secondary small" id="undo-glue" type="button" hidden>${icon("undo")} Rückgängig</button></div>
         <div class="edit-times" id="edit-times"></div>
       </section></div>
@@ -1389,6 +1389,9 @@ async function renderTimer(id) {
     const reviewTitle = review.querySelector("#review-title");
     let activeParticipantSelect = null;
     let participantGenderFilter = "";
+    let preferredParticipantGenderFilter = "";
+    let preferredParticipantAgeFilter = "";
+    let requiredParticipantGenderFilter = "";
 
     function participantName(person) {
       return `${person.name} (${String(person.birth_year).slice(-2)})`;
@@ -1432,20 +1435,20 @@ async function renderTimer(id) {
       activeParticipantSelect = select;
       participantSearch.value = "";
       participantSearchClear.hidden = true;
-      const requiredGender = item.mixed
+      requiredParticipantGenderFilter = item.mixed
         ? mixedTeamRequiredGender(participantSelects, select, participants)
         : "";
-      participantGenderFilter = requiredGender;
-      participantAgeFilter.value = "";
+      participantGenderFilter = requiredParticipantGenderFilter || preferredParticipantGenderFilter;
+      participantAgeFilter.value = preferredParticipantAgeFilter;
       participantFilters.hidden = true;
       participantFilterToggle.classList.remove("active");
-      participantFilterToggle.classList.toggle("filtered", Boolean(requiredGender));
+      participantFilterToggle.classList.toggle("filtered", Boolean(participantGenderFilter || preferredParticipantAgeFilter));
       participantFilterToggle.setAttribute("aria-expanded", "false");
       participantFilterToggle.setAttribute("aria-label", "Filter anzeigen");
       review.querySelectorAll("[data-picker-gender]").forEach((button) => {
         const gender = button.dataset.pickerGender;
-        const active = gender === requiredGender;
-        button.disabled = Boolean(requiredGender && gender !== requiredGender);
+        const active = gender === participantGenderFilter;
+        button.disabled = Boolean(requiredParticipantGenderFilter && gender !== requiredParticipantGenderFilter);
         button.classList.toggle("active", active);
         button.setAttribute("aria-pressed", String(active));
       });
@@ -1631,12 +1634,14 @@ async function renderTimer(id) {
       participantFilterToggle.setAttribute("aria-label", expanded ? "Filter ausblenden" : "Filter anzeigen");
     });
     participantAgeFilter.addEventListener("change", () => {
+      preferredParticipantAgeFilter = participantAgeFilter.value;
       participantFilterToggle.classList.toggle("filtered", Boolean(participantGenderFilter || participantAgeFilter.value));
       renderParticipantPicker();
     });
     review.querySelectorAll("[data-picker-gender]").forEach((button) => button.addEventListener("click", () => {
       if (button.disabled) return;
       participantGenderFilter = button.dataset.pickerGender;
+      preferredParticipantGenderFilter = participantGenderFilter;
       review.querySelectorAll("[data-picker-gender]").forEach((candidate) => {
         const active = candidate === button;
         candidate.classList.toggle("active", active);
@@ -1894,6 +1899,9 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
   let resultEditGlueMode = false;
   let activeResultParticipantSelect = null;
   let resultParticipantGenderFilter = "";
+  let preferredResultParticipantGenderFilter = "";
+  let preferredResultParticipantAgeFilter = "";
+  let requiredResultParticipantGenderFilter = "";
 
   bindDialogClose(resultEditDialog);
   bindDialogClose(resultParticipantPickerDialog);
@@ -1941,20 +1949,20 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
     resultParticipantSearch.value = "";
     resultParticipantSearchClear.hidden = true;
     const assignmentSelects = [...resultEditFields.querySelectorAll(".result-participant-select")];
-    const requiredGender = disciplines[editingResult?.discipline]?.mixed
+    requiredResultParticipantGenderFilter = disciplines[editingResult?.discipline]?.mixed
       ? mixedTeamRequiredGender(assignmentSelects, select, participants)
       : "";
-    resultParticipantGenderFilter = requiredGender;
-    resultParticipantAgeFilter.value = "";
+    resultParticipantGenderFilter = requiredResultParticipantGenderFilter || preferredResultParticipantGenderFilter;
+    resultParticipantAgeFilter.value = preferredResultParticipantAgeFilter;
     resultParticipantFilters.hidden = true;
     resultParticipantFilterToggle.classList.remove("active");
-    resultParticipantFilterToggle.classList.toggle("filtered", Boolean(requiredGender));
+    resultParticipantFilterToggle.classList.toggle("filtered", Boolean(resultParticipantGenderFilter || preferredResultParticipantAgeFilter));
     resultParticipantFilterToggle.setAttribute("aria-expanded", "false");
     resultParticipantFilterToggle.setAttribute("aria-label", "Filter anzeigen");
     document.querySelectorAll("[data-result-picker-gender]").forEach((button) => {
       const gender = button.dataset.resultPickerGender;
-      const active = gender === requiredGender;
-      button.disabled = Boolean(requiredGender && gender !== requiredGender);
+      const active = gender === resultParticipantGenderFilter;
+      button.disabled = Boolean(requiredResultParticipantGenderFilter && gender !== requiredResultParticipantGenderFilter);
       button.classList.toggle("active", active);
       button.setAttribute("aria-pressed", String(active));
     });
@@ -2033,7 +2041,7 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
         <div class="field"><span class="label">Gestoppt</span><div class="total-summary"><strong id="result-edit-stopped">${formatTime(stoppedTime)}</strong></div></div>
         <label class="field"><span>Offiziell</span><input id="result-edit-official" inputmode="decimal" placeholder="m:ss,00" value="${result.official_centiseconds == null ? "" : formatTime(result.official_centiseconds)}"></label>
       </div>
-      <div class="result-edit-lap-toolbar"><span class="label">Runden</span><div><button class="button secondary small" id="result-edit-glue-mode" type="button" aria-pressed="false">${icon("link")} Kleben</button><button class="button secondary small" id="result-edit-undo-glue" type="button" hidden>${icon("undo")} Rückgängig</button></div></div>
+      <div class="result-edit-lap-toolbar"><span class="label">Runden</span><div><button class="button secondary small" id="result-edit-glue-mode" type="button" aria-pressed="false">${icon("link")} Link</button><button class="button secondary small" id="result-edit-undo-glue" type="button" hidden>${icon("undo")} Rückgängig</button></div></div>
       <div class="result-edit-laps"></div>
       <label class="field result-edit-note-field"><span>Notiz <small>optional</small></span><textarea id="result-edit-note" maxlength="300" rows="2" placeholder="Kurzes Feedback">${escapeHtml(result.note || "")}</textarea></label>`;
     const assignmentSelects = [...resultEditFields.querySelectorAll(".result-participant-select")];
@@ -2138,12 +2146,14 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
     resultParticipantFilterToggle.setAttribute("aria-label", expanded ? "Filter ausblenden" : "Filter anzeigen");
   });
   resultParticipantAgeFilter.addEventListener("change", () => {
+    preferredResultParticipantAgeFilter = resultParticipantAgeFilter.value;
     resultParticipantFilterToggle.classList.toggle("filtered", Boolean(resultParticipantGenderFilter || resultParticipantAgeFilter.value));
     renderResultParticipantPicker();
   });
   document.querySelectorAll("[data-result-picker-gender]").forEach((button) => button.addEventListener("click", () => {
     if (button.disabled) return;
     resultParticipantGenderFilter = button.dataset.resultPickerGender;
+    preferredResultParticipantGenderFilter = resultParticipantGenderFilter;
     document.querySelectorAll("[data-result-picker-gender]").forEach((candidate) => {
       const active = candidate === button;
       candidate.classList.toggle("active", active);
@@ -2255,11 +2265,13 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
           ? `<strong>${displayName}</strong>`
           : `<div class="result-person-identity">${personAvatar(resultPerson)}<strong>${escapeHtml(displayName)}</strong></div>`;
         const details = teamMembers.length
-          ? `<div class="result-team-members">${teamMembers.map((member) => {
-            const segmentIndex = lapGroups.findIndex((group) => group.includes(member.position));
-            const segmentValue = segmentIndex >= 0 ? result.segments[segmentIndex] : null;
-            const frequency = segmentIndex >= 0 ? result.frequencies?.[segmentIndex] : null;
-            return `<span class="result-team-member"><span class="result-team-person">${personAvatar(member)}<span>${member.position}. ${escapeHtml(member.name)} (${String(member.birth_year).slice(-2)})</span></span><span class="result-team-split"><strong>${Number.isInteger(segmentValue) ? formatReviewTime(segmentValue) : "–"}</strong>${Number.isInteger(frequency) ? `<small>${frequency}/min</small>` : ""}</span></span>`;
+          ? `<div class="result-team-members">${lapGroups.map((group, segmentIndex) => {
+            const groupedMembers = group
+              .map((position) => teamMembers.find((member) => member.position === position))
+              .filter(Boolean);
+            const segmentValue = result.segments[segmentIndex];
+            const frequency = result.frequencies?.[segmentIndex];
+            return `<div class="result-team-group ${group.length > 1 ? "glued" : ""}"><div class="result-team-group-people">${groupedMembers.map((member) => `<span class="result-team-member"><span class="result-team-person">${personAvatar(member)}<span>${member.position}. ${escapeHtml(member.name)} (${String(member.birth_year).slice(-2)})</span></span></span>`).join("")}</div><span class="result-team-split"><strong>${Number.isInteger(segmentValue) ? formatReviewTime(segmentValue) : "–"}</strong>${Number.isInteger(frequency) ? `<small>${frequency}/min</small>` : ""}</span></div>`;
           }).join("")}</div>`
           : `<div class="result-meta">${escapeHtml(result.age_group)} · ${escapeHtml(result.organization)}</div>`;
         const stoppedTime = result.segments.reduce((sum, value) => sum + (Number.isInteger(value) && value > 0 ? value : 0), 0);

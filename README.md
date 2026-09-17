@@ -11,8 +11,8 @@ Eine bewusst einfache, helle Web-App zur Zeitnahme im Rettungssport. Events, Per
 - Während der Timer läuft, nimmt auch ein Tipp in die untere Bildschirmhälfte eine Runde
 - Ein Tipp oberhalb der Tasten startet pro Runde eine zehnsekündige Frequenzmessung; weitere Tipps werden auf Schläge pro Minute hochgerechnet
 - Kompaktes Auswahlmenü für den Stoppmodus und korrigierbare Abschnittszeiten
-- Gruppierte Stoppmodi für Normal, Einzel und Mannschaft
-- Feste Lap-Anzahl je Disziplin; Normalmodus mit bis zu 20 Laps
+- Gruppierte Stoppmodi für Benutzerdefiniert, Einzel und Mannschaft
+- Feste Lap-Anzahl je Disziplin; benutzerdefinierter Modus mit bis zu 20 Laps
 - Zuordnung einer Person oder von vier Mannschaftspositionen erst nach dem Stoppen
 - Separate offizielle Zeit unabhängig von den Abschnittszeiten
 - Live-Rangliste nach Disziplin und Geschlecht, automatisch jede Minute oder manuell frühestens alle 10 Sekunden aktualisiert
