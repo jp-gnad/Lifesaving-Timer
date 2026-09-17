@@ -1899,6 +1899,7 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
   let resultEditGlueMode = false;
   let activeResultParticipantSelect = null;
   let resultParticipantGenderFilter = "";
+  let resultSelectionCategory = null;
   let preferredResultParticipantGenderFilter = "";
   let preferredResultParticipantAgeFilter = "";
   let requiredResultParticipantGenderFilter = "";
@@ -1985,24 +1986,32 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
       femaleCount: counts.get(`${disciplineId}:female`) || 0,
       maleCount: counts.get(`${disciplineId}:male`) || 0,
     })).filter(({ femaleCount, maleCount }) => femaleCount > 0 || maleCount > 0);
-    const availableGroups = disciplineGroups.map((group) => ({
-      ...group,
-      entries: availableDisciplines.filter(({ item }) => item.group === group.id),
-    })).filter((group) => group.entries.length > 0);
+    if (!resultSelectionCategory) {
+      resultSelectionCategory = availableDisciplines.some(({ item }) => item.group !== "team") ? "individual" : "team";
+    }
+    const categoryEntries = resultSelectionCategory === "team"
+      ? availableDisciplines.filter(({ item }) => item.group === "team")
+      : availableDisciplines.filter(({ item }) => item.group !== "team");
     const resultButton = (disciplineId, item, gender, count) => count
       ? `<button class="result-choice ${gender === "female" ? "female" : "male"}" data-discipline="${disciplineId}" data-gender="${gender}" aria-label="${escapeHtml(item.name)}, ${genderName(gender)}, ${count} ${count === 1 ? "Ergebnis" : "Ergebnisse"}"><strong>${escapeHtml(item.name)}</strong><span>${genderName(gender)}</span></button>`
       : `<span class="result-choice-space" aria-hidden="true"></span>`;
-    resultsRoot.innerHTML = availableDisciplines.length
-      ? `<div class="result-selection" aria-label="Ergebnisgruppen">${availableGroups.map((group, groupIndex) => `
-        <section class="result-selection-group" aria-labelledby="result-group-${groupIndex}">
-          <h2 id="result-group-${groupIndex}">${escapeHtml(group.name)}</h2>
-          <div class="result-selection-group-rows">${group.entries.map(({ disciplineId, item, femaleCount, maleCount }) =>
-            item.mixed
-              ? `<div class="result-selection-row"><button class="result-choice mixed" data-discipline="${disciplineId}" data-gender="mixed" aria-label="${escapeHtml(item.name)}, Mixed, ${femaleCount + maleCount} Ergebnisse"><strong>${escapeHtml(item.name)}</strong><span>Mixed</span></button></div>`
-              : `<div class="result-selection-row">${resultButton(disciplineId, item, "female", femaleCount)}${resultButton(disciplineId, item, "male", maleCount)}</div>`
-          ).join("")}</div>
-        </section>`).join("")}</div>`
-      : `<div class="empty">Noch keine Ergebnisse.</div>`;
+    resultsRoot.innerHTML = `<div class="result-selection" aria-label="Ergebnisgruppen">
+      <div class="result-category-tabs" role="tablist" aria-label="Ergebnisart">
+        <button type="button" role="tab" data-result-category="individual" aria-selected="${resultSelectionCategory === "individual"}" class="${resultSelectionCategory === "individual" ? "active" : ""}">Einzel</button>
+        <button type="button" role="tab" data-result-category="team" aria-selected="${resultSelectionCategory === "team"}" class="${resultSelectionCategory === "team" ? "active" : ""}">Mannschaft</button>
+      </div>
+      ${categoryEntries.length
+        ? `<div class="result-selection-group-rows" role="tabpanel">${categoryEntries.map(({ disciplineId, item, femaleCount, maleCount }) =>
+          item.mixed
+            ? `<div class="result-selection-row"><button class="result-choice mixed" data-discipline="${disciplineId}" data-gender="mixed" aria-label="${escapeHtml(item.name)}, Mixed, ${femaleCount + maleCount} Ergebnisse"><strong>${escapeHtml(item.name)}</strong><span>Mixed</span></button></div>`
+            : `<div class="result-selection-row">${resultButton(disciplineId, item, "female", femaleCount)}${resultButton(disciplineId, item, "male", maleCount)}</div>`
+        ).join("")}</div>`
+        : `<div class="empty">Noch keine ${resultSelectionCategory === "team" ? "Mannschafts" : "Einzel"}ergebnisse.</div>`}
+    </div>`;
+    resultsRoot.querySelectorAll("[data-result-category]").forEach((button) => button.addEventListener("click", () => {
+      resultSelectionCategory = button.dataset.resultCategory;
+      renderSelection();
+    }));
     resultsRoot.querySelectorAll(".result-choice").forEach((button) => button.addEventListener("click", () => {
       window.scrollTo(0, 0);
       location.hash = `#/viewer/${id}/${button.dataset.discipline}/${button.dataset.gender}`;
