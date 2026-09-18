@@ -904,12 +904,11 @@ async function renderEventSettings(id, section = null) {
         <div class="field full"><label for="settings-event-name">Name</label><input id="settings-event-name" name="name" maxlength="120" required value="${escapeHtml(event.name)}"></div>
         <div class="field event-date-field"><label for="settings-event-date">Datum</label><input id="settings-event-date" name="eventDate" type="date" value="${escapeHtml(event.event_date || "")}"></div>
         <div class="field"><label for="settings-event-location">Ort</label><input id="settings-event-location" name="location" maxlength="120" value="${escapeHtml(event.location || "")}"></div>
-      </div></fieldset>
-      <fieldset class="settings-section"><legend>Bahnlänge</legend><div class="settings-choice-grid three">
+      </div><div class="event-pool-settings"><span class="field-label">Bahnlänge</span><div class="settings-choice-grid three">
         <label><input type="radio" name="poolLength" value="25" ${poolLength === "25" ? "checked" : ""}><span>25 m</span></label>
         <label><input type="radio" name="poolLength" value="50" ${poolLength === "50" ? "checked" : ""}><span>50 m</span></label>
         <label><input type="radio" name="poolLength" value="custom" ${poolLength === "custom" ? "checked" : ""}><span>Eigene</span></label>
-      </div><label class="field custom-pool-length" ${poolLength === "custom" ? "" : "hidden"}><span>Bahnlänge in Metern</span><input id="custom-pool-length" name="customPoolLength" type="number" min="1" max="10000" step="0.01" inputmode="decimal" value="${event.custom_pool_length ?? ""}"></label></fieldset>`;
+      </div><label class="field custom-pool-length" ${poolLength === "custom" ? "" : "hidden"}><span>Bahnlänge in Metern</span><input id="custom-pool-length" name="customPoolLength" type="number" min="1" max="10000" step="0.01" inputmode="decimal" value="${event.custom_pool_length ?? ""}"></label></div></fieldset>`;
   const sectionMarkup = activeSection === "timer" ? `
       <fieldset class="settings-section"><legend>Status</legend><div class="settings-choice-grid two">
         <label><input type="radio" name="timerEnabled" value="true" ${eventTimerEnabled(event) ? "checked" : ""}><span>Aktiviert</span></label>
@@ -922,7 +921,7 @@ async function renderEventSettings(id, section = null) {
         <label><input type="radio" name="resultsMode" value="pause" ${resultsMode === "pause" ? "checked" : ""}><span>Pause</span></label>
         <label><input type="radio" name="resultsMode" value="stop" ${resultsMode === "stop" ? "checked" : ""}><span>Stopp</span></label>
       </div></fieldset>
-      <fieldset class="settings-section"><legend>Ergebnis-URL</legend><label class="field"><span>Link <small>ohne Funktion</small></span><input name="resultUrl" type="url" inputmode="url" maxlength="500" placeholder="https://…" value="${escapeHtml(event.result_url || "")}"></label></fieldset>`
+      <fieldset class="settings-section"><legend>Ergebnis-URL</legend><div class="result-url-heading"><span>Link</span><a class="result-source-link" href="https://competition.dlrg.net/de/competitions" target="_blank" rel="noopener noreferrer" aria-label="DLRG Competition öffnen" title="DLRG Competition öffnen">${icon("link")}</a></div><label class="field"><input name="resultUrl" type="url" inputmode="url" maxlength="500" placeholder="https://…" value="${escapeHtml(event.result_url || "")}"></label></fieldset>`
     : `<fieldset class="settings-section"><legend>Personen</legend><div class="settings-choice-grid three">
         <label><input type="radio" name="participantMode" value="edit" ${participantMode === "edit" ? "checked" : ""}><span>Bearbeiten</span></label>
         <label><input type="radio" name="participantMode" value="view" ${participantMode === "view" ? "checked" : ""}><span>Anzeigen</span></label>

@@ -132,7 +132,7 @@ body.viewer-overview .site-header { height: calc(58px + env(safe-area-inset-top)
 .event-action-tile.disabled .event-action-icon { background: #dfe3e8; color: #8992a0; }
 .event-action-tile.disabled:hover { border-color: #cfd4dc; background: #fff; }
 .event-action-tile.results-paused { border-color: #e6b85c; background: #fff; }
-.event-action-tile.results-paused .event-action-icon { background: #fff; color: #c47d00; }
+.event-action-tile.results-paused .event-action-icon { background: #fff1d2; color: #c47d00; }
 .event-action-tile.results-paused:hover { border-color: #d49a29; background: #fff; }
 .event-action-tile strong { font-size: 18px; }
 .event-action-icon { width: 78px; height: 78px; display: grid; place-items: center; border-radius: 16px; background: #eaf2ff; color: var(--primary); }
@@ -268,6 +268,12 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 .results-mode-settings label:nth-child(2) input:checked + span { border-color: #e2c468; background: #fff9e8; color: #7b5d00; }
 .results-mode-settings label:nth-child(3) input:checked + span { border-color: #dfabab; background: #fff3f3; color: var(--danger); }
 .custom-pool-length { margin-top: 12px; }
+.event-pool-settings { margin-top: 14px; display: grid; gap: 7px; }
+.event-pool-settings .field-label { font-size: 13px; font-weight: 700; }
+.result-url-heading { margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 700; }
+.result-source-link { width: 30px; height: 30px; border-radius: 7px; color: var(--primary); display: grid; place-items: center; }
+.result-source-link:hover { background: var(--surface-alt); }
+.result-source-link .icon { width: 17px; height: 17px; }
 .settings-disciplines { display: grid; gap: 8px; }
 .settings-disciplines > h2 { margin: 0; font-size: 17px; }
 .settings-disciplines > p { margin: -4px 0 1px; color: var(--muted); font-size: 12px; }
