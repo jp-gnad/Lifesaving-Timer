@@ -2003,8 +2003,8 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
     <div id="viewer-overview-head" ${selected ? "hidden" : ""}>
     <a class="back" href="#/event/${id}" data-history-back>${icon("arrow-left")} ${escapeHtml(event.name)}</a>
     <div class="page-head viewer-page-head"><h1>Ergebnisse</h1>
-      <div class="viewer-refresh"><div class="live-note ${resultsMode}"><span class="live-dot"></span><span id="live-status">${resultsMode === "live" ? "Live · jede Minute" : resultModeLabel(resultsMode)}</span></div>
-      <button class="button secondary viewer-refresh-button" id="refresh-results" ${resultsMode === "live" ? "" : "disabled"}>${icon("refresh")} Aktualisieren</button></div></div></div>
+      <div class="viewer-refresh"><div class="live-note ${resultsMode}"><span class="live-dot"></span><span id="live-status">${resultModeLabel(resultsMode)}</span></div>
+      <button class="button secondary icon-button viewer-refresh-button" id="refresh-results" aria-label="Ergebnisse aktualisieren" title="Ergebnisse aktualisieren" ${resultsMode === "live" ? "" : "disabled"}>${icon("refresh")}</button></div></div></div>
     <div id="results"><div class="loading">Ergebnisse werden geladen …</div></div>
     <dialog id="result-edit-dialog"><form class="dialog-body result-edit-form" id="result-edit-form">
       <div class="dialog-title-row"><h2>Ergebnis bearbeiten</h2><button type="button" class="button secondary icon-button" data-close aria-label="Schließen">${icon("x")}</button></div>
@@ -2141,7 +2141,9 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
     }
     const categoryEntries = resultSelectionCategory === "team"
       ? availableDisciplines.filter(({ item }) => item.group === "team")
-      : availableDisciplines.filter(({ item }) => item.group !== "team");
+      : availableDisciplines
+        .filter(({ item }) => item.group !== "team")
+        .sort((left, right) => Number(left.disciplineId === "normal") - Number(right.disciplineId === "normal"));
     const resultButton = (disciplineId, item, gender, count) => count
       ? `<button class="result-choice ${gender === "female" ? "female" : "male"}" data-discipline="${disciplineId}" data-gender="${gender}" aria-label="${escapeHtml(item.name)}, ${genderName(gender)}, ${count} ${count === 1 ? "Ergebnis" : "Ergebnisse"}"><strong>${escapeHtml(item.name)}</strong><span>${genderName(gender)}</span></button>`
       : `<span class="result-choice-space" aria-hidden="true"></span>`;
@@ -2154,7 +2156,7 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
         ? `<div class="result-selection-group-rows" role="tabpanel">${categoryEntries.map(({ disciplineId, item, femaleCount, maleCount }) =>
           item.mixed
             ? `<div class="result-selection-row"><button class="result-choice mixed" data-discipline="${disciplineId}" data-gender="mixed" aria-label="${escapeHtml(item.name)}, Mixed, ${femaleCount + maleCount} Ergebnisse"><strong>${escapeHtml(item.name)}</strong><span>Mixed</span></button></div>`
-            : `<div class="result-selection-row">${resultButton(disciplineId, item, "female", femaleCount)}${resultButton(disciplineId, item, "male", maleCount)}</div>`
+            : `<div class="result-selection-row ${disciplineId === "normal" ? "custom-result-row" : ""}">${resultButton(disciplineId, item, "female", femaleCount)}${resultButton(disciplineId, item, "male", maleCount)}</div>`
         ).join("")}</div>`
         : `<div class="empty">Noch keine ${resultSelectionCategory === "team" ? "Mannschafts" : "Einzel"}ergebnisse.</div>`}
     </div>`;
@@ -2516,9 +2518,13 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
         clearInterval(cooldownTimer);
         cooldownTimer = null;
         refreshButton.disabled = false;
-        refreshButton.innerHTML = `${icon("refresh")} Aktualisieren`;
+        refreshButton.innerHTML = icon("refresh");
+        refreshButton.setAttribute("aria-label", "Ergebnisse aktualisieren");
+        refreshButton.title = "Ergebnisse aktualisieren";
       } else {
-        refreshButton.textContent = `Erneut in ${remaining} s`;
+        refreshButton.innerHTML = icon("refresh");
+        refreshButton.setAttribute("aria-label", `Erneut in ${remaining} Sekunden`);
+        refreshButton.title = `Erneut in ${remaining} Sekunden`;
       }
     };
     updateButton();
@@ -2540,12 +2546,10 @@ async function renderViewer(id, initialDiscipline = null, initialGender = null) 
       const data = await api(`/events/${id}/results`);
       allResults = data.results;
       renderContent();
-      document.querySelector("#live-status").textContent = resultsMode === "pause"
-        ? "Pause · Stand eingefroren"
-        : `Live · ${new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date())}`;
+      document.querySelector("#live-status").textContent = resultModeLabel(resultsMode);
     } catch (err) {
       if (!silent) resultsRoot.innerHTML = `<div class="empty">${escapeHtml(err.message)}</div>`;
-      document.querySelector("#live-status").textContent = "Verbindung unterbrochen";
+      document.querySelector("#live-status").textContent = resultModeLabel(resultsMode);
     } finally { loading = false; }
   }
   refreshButton.addEventListener("click", () => {
