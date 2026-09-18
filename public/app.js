@@ -935,7 +935,6 @@ async function renderEventSettings(id, section = null) {
       { id: "people", icon: "users", name: "Personen", detail: participantMode === "edit" ? "Bearbeiten" : (participantMode === "view" ? "Anzeigen" : "Verbergen") },
     ];
     app.innerHTML = `
-      <a class="back" href="#/event/${id}" data-history-back>${icon("arrow-left")} ${escapeHtml(event.name)}</a>
       <div class="page-head settings-page-head"><h1>Event-Einstellungen</h1></div>
       <form id="event-settings-form" class="event-settings-form settings-overview-event">
         ${eventMarkup}
@@ -946,7 +945,6 @@ async function renderEventSettings(id, section = null) {
       </form>`;
   } else {
     app.innerHTML = `
-      <a class="back" href="#/settings/${id}" data-history-back>${icon("arrow-left")} Event-Einstellungen</a>
       <div class="page-head settings-page-head"><h1>${sectionName}</h1></div>
       <form id="event-settings-form" class="event-settings-form">
         ${sectionMarkup}
