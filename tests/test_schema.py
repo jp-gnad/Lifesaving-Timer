@@ -158,13 +158,14 @@ class SchemaTest(unittest.TestCase):
         self.db.execute("INSERT INTO events (id, name) VALUES (?, ?)", ("event-1", "Testevent"))
         settings = self.db.execute(
             """SELECT timer_enabled, results_mode, results_paused_at, pool_length,
-                      custom_pool_length, enabled_disciplines_json, result_url
+                      custom_pool_length, enabled_disciplines_json, result_url, results_pause_generation
                FROM events WHERE id = ?""",
             ("event-1",),
         ).fetchone()
         self.assertEqual(settings[0:5], (1, "live", None, "25", None))
         self.assertIn('"rescue50"', settings[5])
         self.assertEqual(settings[6], "")
+        self.assertEqual(settings[7], 0)
 
     def test_invalid_event_status_is_rejected(self):
         with self.assertRaises(sqlite3.IntegrityError):

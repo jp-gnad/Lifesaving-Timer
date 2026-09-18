@@ -159,7 +159,9 @@ async function handleApi(request, env) {
       LEFT JOIN participants p ON p.event_id = e.id
       LEFT JOIN results r ON r.event_id = e.id
       GROUP BY e.id
-      ORDER BY COALESCE(e.event_date, e.created_at) DESC, e.created_at DESC
+      ORDER BY CASE WHEN e.results_mode = 'live' THEN 0 ELSE 1 END,
+               CASE WHEN e.event_date IS NULL THEN 1 ELSE 0 END,
+               e.event_date DESC, e.created_at DESC
     `).all();
     return json({ events: results });
   }
@@ -232,22 +234,24 @@ async function handleApi(request, env) {
     const enabledDisciplines = validatedEnabledDisciplines(body.enabledDisciplines, existingDisciplines);
     const resultUrl = body.resultUrl === undefined ? existing.result_url : validatedEventUrl(body.resultUrl);
     let pausedAt = existing.results_paused_at;
+    let pauseGeneration = Number(existing.results_pause_generation) || 0;
     if (resultsMode === "live") pausedAt = null;
     else if (resultsMode === "pause" && existing.results_mode !== "pause") {
       pausedAt = (await env.DB.prepare("SELECT CURRENT_TIMESTAMP AS now").first()).now;
+      pauseGeneration += 1;
     }
     await env.DB.prepare(`
       UPDATE events
       SET name = ?, event_date = ?, location = ?, timer_enabled = ?, results_mode = ?, results_paused_at = ?,
-          pool_length = ?, custom_pool_length = ?, enabled_disciplines_json = ?, result_url = ?
+          results_pause_generation = ?, pool_length = ?, custom_pool_length = ?, enabled_disciplines_json = ?, result_url = ?
       WHERE id = ?
-    `).bind(name, eventDate, location, timerEnabled ? 1 : 0, resultsMode, pausedAt, poolLength,
+    `).bind(name, eventDate, location, timerEnabled ? 1 : 0, resultsMode, pausedAt, pauseGeneration, poolLength,
       customPoolLength, JSON.stringify(enabledDisciplines), resultUrl, eventId).run();
     return json({ ok: true });
   }
 
   const activeEvent = await env.DB.prepare(`
-    SELECT id, timer_enabled, results_mode, results_paused_at
+    SELECT id, timer_enabled, results_mode, results_paused_at, results_pause_generation
     FROM events WHERE id = ?
   `).bind(eventId).first();
   if (!activeEvent) return fail("Event nicht gefunden.", 404);
@@ -355,8 +359,8 @@ async function handleApi(request, env) {
     const conditions = ["r.event_id = ?"];
     const bindings = [eventId];
     if (activeEvent.results_mode === "pause") {
-      conditions.push("r.created_at <= ?");
-      bindings.push(activeEvent.results_paused_at);
+      conditions.push("(r.created_pause_generation IS NULL OR r.created_pause_generation <> ?)");
+      bindings.push(activeEvent.results_pause_generation);
     }
     if (discipline) {
       if (!(discipline in DISCIPLINES)) throw new Error("Ungültige Disziplin.");
@@ -377,8 +381,8 @@ async function handleApi(request, env) {
     const memberConditions = ["r.event_id = ?"];
     const memberBindings = [eventId];
     if (activeEvent.results_mode === "pause") {
-      memberConditions.push("r.created_at <= ?");
-      memberBindings.push(activeEvent.results_paused_at);
+      memberConditions.push("(r.created_pause_generation IS NULL OR r.created_pause_generation <> ?)");
+      memberBindings.push(activeEvent.results_pause_generation);
     }
     const { results: memberRows } = await env.DB.prepare(`
       SELECT rm.result_id, rm.position, p.id, p.name, p.birth_year, p.age_group, p.gender, p.organization
@@ -425,7 +429,6 @@ async function handleApi(request, env) {
       }
     }
     if (!activeEvent.timer_enabled) return fail("Der Timer ist für dieses Event deaktiviert.", 423);
-    if (activeEvent.results_mode !== "live") return fail("Die Ergebnissynchronisierung ist für dieses Event pausiert.", 423);
     if (!(body.discipline in DISCIPLINES)) throw new Error("Ungültige Disziplin.");
     const discipline = DISCIPLINES[body.discipline];
     const participantIds = discipline.team ? body.participantIds : [body.participantId];
@@ -445,10 +448,11 @@ async function handleApi(request, env) {
       : participantIds[0];
     const { segments, lapGroups, frequencies, segmentTotal, officialTime } = validatedResultTiming(body, discipline);
     const id = crypto.randomUUID();
+    const createdPauseGeneration = activeEvent.results_mode === "pause" ? activeEvent.results_pause_generation : null;
     const resultInsert = env.DB.prepare(`
-      INSERT INTO results (id, event_id, participant_id, discipline, total_centiseconds, official_centiseconds, segments_json, frequencies_json, lap_groups_json, submission_key, note)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(id, eventId, primaryParticipantId, body.discipline, segmentTotal, officialTime, JSON.stringify(segments), JSON.stringify(frequencies), JSON.stringify(lapGroups), submissionKey, note);
+      INSERT INTO results (id, event_id, participant_id, discipline, total_centiseconds, official_centiseconds, segments_json, frequencies_json, lap_groups_json, submission_key, note, created_pause_generation)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(id, eventId, primaryParticipantId, body.discipline, segmentTotal, officialTime, JSON.stringify(segments), JSON.stringify(frequencies), JSON.stringify(lapGroups), submissionKey, note, createdPauseGeneration);
     if (discipline.team) {
       await env.DB.batch([resultInsert, ...participantIds.map((participantId, index) => env.DB.prepare(`
         INSERT INTO result_members (result_id, participant_id, position) VALUES (?, ?, ?)

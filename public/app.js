@@ -792,6 +792,13 @@ new MutationObserver(() => {
 async function renderHome() {
   setDocumentTitle("");
   const { events } = await api("/events");
+  events.sort((left, right) => {
+    const liveOrder = Number(eventResultsMode(right) === "live") - Number(eventResultsMode(left) === "live");
+    if (liveOrder) return liveOrder;
+    const leftDate = left.event_date || String(left.created_at || "").slice(0, 10);
+    const rightDate = right.event_date || String(right.created_at || "").slice(0, 10);
+    return rightDate.localeCompare(leftDate) || String(right.created_at || "").localeCompare(String(left.created_at || ""));
+  });
   app.innerHTML = `
     <div class="page-head">
       <h1>Events</h1>
@@ -799,7 +806,7 @@ async function renderHome() {
     </div>
     <section class="section event-list-section" aria-label="Events">
       ${events.length ? `<div class="stack">${events.map((event) => `
-        <a class="card event-row" href="#/event/${event.id}" aria-label="${escapeHtml(event.name)} öffnen">
+        <a class="card event-row ${eventResultsMode(event) === "live" ? "live-event" : ""}" href="#/event/${event.id}" aria-label="${escapeHtml(event.name)} öffnen">
           <div class="event-row-content">${eventIconMarkup(event, "event-list-icon")}<div class="event-row-copy"><h3>${escapeHtml(event.name)}</h3><div class="event-meta">
             <span class="meta-item">${icon("calendar")} ${escapeHtml(dateText(event.event_date))}</span>
             ${event.location ? `<span class="meta-item">${icon("location")} ${escapeHtml(event.location)}</span>` : ""}
@@ -853,9 +860,11 @@ async function renderEvent(id) {
     </div>
     <div class="event-action-grid">
       ${timerEnabled
-        ? `<a class="card event-action-tile" href="#/timer/${id}"><span class="event-action-icon">${icon("timer")}</span><strong>Timer</strong><small class="event-feature-status live">Aktiv</small></a>`
-        : `<div class="card event-action-tile disabled" aria-disabled="true"><span class="event-action-icon">${icon("timer")}</span><strong>Timer</strong><small class="event-feature-status stop">Deaktiviert</small></div>`}
-      <a class="card event-action-tile" href="#/viewer/${id}"><span class="event-action-icon">${icon("table")}</span><strong>Ergebnisse</strong><small class="event-feature-status ${resultsMode}">${resultModeLabel(resultsMode)}</small></a>
+        ? `<a class="card event-action-tile" href="#/timer/${id}"><span class="event-action-icon">${icon("timer")}</span><strong>Timer</strong></a>`
+        : `<div class="card event-action-tile disabled" aria-disabled="true"><span class="event-action-icon">${icon("timer")}</span><strong>Timer</strong></div>`}
+      ${resultsMode === "stop"
+        ? `<div class="card event-action-tile disabled" aria-disabled="true"><span class="event-action-icon">${icon("table")}</span><strong>Ergebnisse</strong></div>`
+        : `<a class="card event-action-tile" href="#/viewer/${id}"><span class="event-action-icon">${icon("table")}</span><strong>Ergebnisse</strong></a>`}
       <a class="card event-action-tile" href="#/people/${id}"><span class="event-action-icon">${icon("users")}</span><strong>Personen</strong></a>
     </div>`;
 }
@@ -936,7 +945,7 @@ async function renderEventSettings(id) {
       submitButton.disabled = true;
       error.textContent = "";
       await api(`/events/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
-      if (payload.timerEnabled && payload.resultsMode === "live") syncPendingResults({ includeBlocked: true }).catch(() => {});
+      if (payload.timerEnabled) syncPendingResults({ includeBlocked: true }).catch(() => {});
       if (history.length > 1) history.back();
       else location.hash = `#/event/${id}`;
     } catch (err) {

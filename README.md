@@ -16,7 +16,7 @@ Eine bewusst einfache, helle Web-App zur Zeitnahme im Rettungssport. Events, Per
 - Feste Lap-Anzahl je Disziplin; benutzerdefinierter Modus mit bis zu 20 Laps
 - Zuordnung einer Person oder von vier Mannschaftspositionen erst nach dem Stoppen
 - Separate offizielle Zeit unabhängig von den Abschnittszeiten
-- Ergebnisanzeige wahlweise live, mit eingefrorenem Stand oder vollständig gestoppt
+- Ergebnisanzeige wahlweise live, mit eingefrorenem Stand oder vollständig gestoppt; aktive Timer laden weiterhin Ergebnisse hoch
 - Live-Rangliste nach Disziplin und Geschlecht, automatisch jede Minute oder manuell frühestens alle 10 Sekunden aktualisiert
 - Speicherung im Format `m:ss,00`, ab zehn Minuten `mm:ss,00` (intern auf Hundertstelsekunden genau)
 
