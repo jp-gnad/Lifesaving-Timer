@@ -901,7 +901,7 @@ async function renderEventSettings(id, section = null) {
   }).join("");
   const eventMarkup = `
       <fieldset class="settings-section"><legend>Event</legend><div class="form-grid">
-        <div class="field full"><label for="settings-event-name">Eventname</label><input id="settings-event-name" name="name" maxlength="120" required value="${escapeHtml(event.name)}"></div>
+        <div class="field full"><label for="settings-event-name">Name</label><input id="settings-event-name" name="name" maxlength="120" required value="${escapeHtml(event.name)}"></div>
         <div class="field event-date-field"><label for="settings-event-date">Datum</label><input id="settings-event-date" name="eventDate" type="date" value="${escapeHtml(event.event_date || "")}"></div>
         <div class="field"><label for="settings-event-location">Ort</label><input id="settings-event-location" name="location" maxlength="120" value="${escapeHtml(event.location || "")}"></div>
       </div></fieldset>
@@ -939,13 +939,12 @@ async function renderEventSettings(id, section = null) {
       <a class="back" href="#/event/${id}" data-history-back>${icon("arrow-left")} ${escapeHtml(event.name)}</a>
       <div class="page-head settings-page-head"><h1>Event-Einstellungen</h1></div>
       <form id="event-settings-form" class="event-settings-form settings-overview-event">
-        <div class="settings-inline-heading"><span class="settings-overview-symbol">${icon("calendar")}</span><strong>Event</strong></div>
         ${eventMarkup}
+        <nav class="settings-overview" aria-label="Weitere Einstellungsbereiche">${settingsItems.map((item) => `<a class="settings-overview-item" href="#/settings/${id}/${item.id}"><span class="settings-overview-symbol">${icon(item.icon)}</span><span><strong>${item.name}</strong><small>${escapeHtml(item.detail)}</small></span>${icon("arrow-right")}</a>`).join("")}</nav>
         <p class="form-error" id="event-settings-error" role="alert"></p>
         <div class="event-settings-actions"><a class="button secondary" href="#/event/${id}" data-history-back>Abbrechen</a><button class="button" type="submit">Speichern</button></div>
         <button type="button" class="button danger small event-settings-delete" id="delete-event-settings">${icon("trash")} Event löschen</button>
-      </form>
-      <nav class="settings-overview" aria-label="Weitere Einstellungsbereiche">${settingsItems.map((item) => `<a class="settings-overview-item" href="#/settings/${id}/${item.id}"><span class="settings-overview-symbol">${icon(item.icon)}</span><span><strong>${item.name}</strong><small>${escapeHtml(item.detail)}</small></span>${icon("arrow-right")}</a>`).join("")}</nav>`;
+      </form>`;
   } else {
     app.innerHTML = `
       <a class="back" href="#/settings/${id}" data-history-back>${icon("arrow-left")} Event-Einstellungen</a>
@@ -994,8 +993,10 @@ async function renderEventSettings(id, section = null) {
       error.textContent = "";
       await api(`/events/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
       if (payload.timerEnabled) syncPendingResults({ includeBlocked: true }).catch(() => {});
-      if (history.length > 1) history.back();
-      else location.hash = `#/settings/${id}`;
+      if (activeSection && history.length > 2) history.go(-2);
+      else if (activeSection) location.hash = `#/event/${id}`;
+      else if (history.length > 1) history.back();
+      else location.hash = `#/event/${id}`;
     } catch (err) {
       error.textContent = err.message;
       submitButton.disabled = false;
