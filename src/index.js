@@ -34,6 +34,30 @@ function cleanText(value, field, max = 120, required = true) {
   return text;
 }
 
+function validatedEventUrl(value) {
+  const text = cleanText(value, "Ergebnis-URL", 500, false);
+  if (!text) return "";
+  let parsed;
+  try {
+    parsed = new URL(text);
+  } catch {
+    throw new Error("Die Ergebnis-URL ist ungültig.");
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error("Die Ergebnis-URL muss mit http:// oder https:// beginnen.");
+  return text;
+}
+
+function validatedEnabledDisciplines(value, fallback) {
+  if (value === undefined) return fallback;
+  if (!Array.isArray(value)) throw new Error("Ungültige Disziplinenauswahl.");
+  const selected = [...new Set(value)];
+  if (!selected.length) throw new Error("Mindestens eine Disziplin muss aktiviert sein.");
+  if (selected.some((discipline) => typeof discipline !== "string" || !(discipline in DISCIPLINES))) {
+    throw new Error("Ungültige Disziplinenauswahl.");
+  }
+  return selected;
+}
+
 function validatedResultTiming(body, discipline) {
   if (!Array.isArray(body.segments) || !body.segments.length) throw new Error("Keine Zeiten vorhanden.");
   const segments = body.segments.map((value) => value === null ? null : Number(value));
@@ -117,10 +141,6 @@ async function bodyOf(request) {
   return request.json();
 }
 
-async function eventExists(db, id) {
-  return db.prepare("SELECT id FROM events WHERE id = ?").bind(id).first();
-}
-
 async function handleApi(request, env) {
   const url = new URL(request.url);
   const parts = url.pathname.split("/").filter(Boolean);
@@ -185,17 +205,52 @@ async function handleApi(request, env) {
 
   if (parts.length === 3 && method === "PATCH") {
     const body = await bodyOf(request);
+    const existing = await env.DB.prepare("SELECT * FROM events WHERE id = ?").bind(eventId).first();
+    if (!existing) return fail("Event nicht gefunden.", 404);
     const name = cleanText(body.name, "Eventname");
     const location = cleanText(body.location, "Ort", 120, false);
     const eventDate = body.eventDate ? cleanText(body.eventDate, "Datum", 10) : null;
     if (eventDate && !/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) throw new Error("Ungültiges Datum.");
-    const result = await env.DB.prepare("UPDATE events SET name = ?, event_date = ?, location = ? WHERE id = ?")
-      .bind(name, eventDate, location, eventId).run();
-    if (!result.meta.changes) return fail("Event nicht gefunden.", 404);
+    const timerEnabled = body.timerEnabled === undefined ? Boolean(existing.timer_enabled) : body.timerEnabled;
+    if (typeof timerEnabled !== "boolean") throw new Error("Ungültiger Timer-Status.");
+    const resultsMode = body.resultsMode === undefined ? existing.results_mode : body.resultsMode;
+    if (!['live', 'pause', 'stop'].includes(resultsMode)) throw new Error("Ungültiger Ergebnis-Status.");
+    const poolLength = body.poolLength === undefined ? existing.pool_length : String(body.poolLength);
+    if (!['25', '50', 'custom'].includes(poolLength)) throw new Error("Ungültige Bahnlänge.");
+    const customPoolLength = poolLength === "custom"
+      ? Number(body.customPoolLength === undefined ? existing.custom_pool_length : body.customPoolLength)
+      : null;
+    if (poolLength === "custom" && (!Number.isFinite(customPoolLength) || customPoolLength <= 0 || customPoolLength > 10000)) {
+      throw new Error("Bitte eine gültige benutzerdefinierte Bahnlänge eingeben.");
+    }
+    let existingDisciplines;
+    try {
+      existingDisciplines = JSON.parse(existing.enabled_disciplines_json || "[]");
+    } catch {
+      existingDisciplines = Object.keys(DISCIPLINES);
+    }
+    const enabledDisciplines = validatedEnabledDisciplines(body.enabledDisciplines, existingDisciplines);
+    const resultUrl = body.resultUrl === undefined ? existing.result_url : validatedEventUrl(body.resultUrl);
+    let pausedAt = existing.results_paused_at;
+    if (resultsMode === "live") pausedAt = null;
+    else if (resultsMode === "pause" && existing.results_mode !== "pause") {
+      pausedAt = (await env.DB.prepare("SELECT CURRENT_TIMESTAMP AS now").first()).now;
+    }
+    await env.DB.prepare(`
+      UPDATE events
+      SET name = ?, event_date = ?, location = ?, timer_enabled = ?, results_mode = ?, results_paused_at = ?,
+          pool_length = ?, custom_pool_length = ?, enabled_disciplines_json = ?, result_url = ?
+      WHERE id = ?
+    `).bind(name, eventDate, location, timerEnabled ? 1 : 0, resultsMode, pausedAt, poolLength,
+      customPoolLength, JSON.stringify(enabledDisciplines), resultUrl, eventId).run();
     return json({ ok: true });
   }
 
-  if (!(await eventExists(env.DB, eventId))) return fail("Event nicht gefunden.", 404);
+  const activeEvent = await env.DB.prepare(`
+    SELECT id, timer_enabled, results_mode, results_paused_at
+    FROM events WHERE id = ?
+  `).bind(eventId).first();
+  if (!activeEvent) return fail("Event nicht gefunden.", 404);
 
   if (parts[3] === "participants" && parts[4] === "import" && parts.length === 5 && method === "GET") {
     const event = await env.DB.prepare("SELECT event_date FROM events WHERE id = ?").bind(eventId).first();
@@ -294,10 +349,15 @@ async function handleApi(request, env) {
   }
 
   if (parts[3] === "results" && parts.length === 4 && method === "GET") {
+    if (activeEvent.results_mode === "stop") return json({ results: [], mode: "stop" });
     const discipline = url.searchParams.get("discipline");
     const gender = url.searchParams.get("gender");
     const conditions = ["r.event_id = ?"];
     const bindings = [eventId];
+    if (activeEvent.results_mode === "pause") {
+      conditions.push("r.created_at <= ?");
+      bindings.push(activeEvent.results_paused_at);
+    }
     if (discipline) {
       if (!(discipline in DISCIPLINES)) throw new Error("Ungültige Disziplin.");
       conditions.push("r.discipline = ?");
@@ -314,20 +374,26 @@ async function handleApi(request, env) {
       WHERE ${conditions.join(" AND ")}
       ORDER BY COALESCE(r.official_centiseconds, r.total_centiseconds) ASC, r.created_at ASC
     `).bind(...bindings).all();
+    const memberConditions = ["r.event_id = ?"];
+    const memberBindings = [eventId];
+    if (activeEvent.results_mode === "pause") {
+      memberConditions.push("r.created_at <= ?");
+      memberBindings.push(activeEvent.results_paused_at);
+    }
     const { results: memberRows } = await env.DB.prepare(`
       SELECT rm.result_id, rm.position, p.id, p.name, p.birth_year, p.age_group, p.gender, p.organization
       FROM result_members rm
       JOIN results r ON r.id = rm.result_id
       JOIN participants p ON p.id = rm.participant_id
-      WHERE r.event_id = ?
+      WHERE ${memberConditions.join(" AND ")}
       ORDER BY rm.result_id, rm.position
-    `).bind(eventId).all();
+    `).bind(...memberBindings).all();
     const membersByResult = new Map();
     memberRows.forEach((member) => {
       if (!membersByResult.has(member.result_id)) membersByResult.set(member.result_id, []);
       membersByResult.get(member.result_id).push(member);
     });
-    return json({ results: results.map((row) => ({
+    return json({ mode: activeEvent.results_mode, results: results.map((row) => ({
       ...row,
       segments: JSON.parse(row.segments_json),
       frequencies: JSON.parse(row.frequencies_json || "[]"),
@@ -358,6 +424,8 @@ async function handleApi(request, env) {
         });
       }
     }
+    if (!activeEvent.timer_enabled) return fail("Der Timer ist für dieses Event deaktiviert.", 423);
+    if (activeEvent.results_mode !== "live") return fail("Die Ergebnissynchronisierung ist für dieses Event pausiert.", 423);
     if (!(body.discipline in DISCIPLINES)) throw new Error("Ungültige Disziplin.");
     const discipline = DISCIPLINES[body.discipline];
     const participantIds = discipline.team ? body.participantIds : [body.participantId];
@@ -392,6 +460,7 @@ async function handleApi(request, env) {
   }
 
   if (parts[3] === "results" && parts[4] && parts.length === 5 && method === "PATCH") {
+    if (activeEvent.results_mode !== "live") return fail("Ergebnisse können derzeit nicht geändert werden.", 423);
     const existing = await env.DB.prepare("SELECT id, discipline, note, participant_id FROM results WHERE id = ? AND event_id = ?")
       .bind(parts[4], eventId).first();
     if (!existing) return fail("Ergebnis nicht gefunden.", 404);
@@ -451,6 +520,7 @@ async function handleApi(request, env) {
   }
 
   if (parts[3] === "results" && parts[4] && parts.length === 5 && method === "DELETE") {
+    if (activeEvent.results_mode !== "live") return fail("Ergebnisse können derzeit nicht gelöscht werden.", 423);
     const result = await env.DB.prepare("DELETE FROM results WHERE id = ? AND event_id = ?")
       .bind(parts[4], eventId).run();
     if (!result.meta.changes) return fail("Ergebnis nicht gefunden.", 404);

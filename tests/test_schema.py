@@ -154,6 +154,25 @@ class SchemaTest(unittest.TestCase):
             {"candidate_id", "name", "birth_year", "gender", "organization", "search_name"},
         )
 
+    def test_event_settings_have_safe_defaults(self):
+        self.db.execute("INSERT INTO events (id, name) VALUES (?, ?)", ("event-1", "Testevent"))
+        settings = self.db.execute(
+            """SELECT timer_enabled, results_mode, results_paused_at, pool_length,
+                      custom_pool_length, enabled_disciplines_json, result_url
+               FROM events WHERE id = ?""",
+            ("event-1",),
+        ).fetchone()
+        self.assertEqual(settings[0:5], (1, "live", None, "25", None))
+        self.assertIn('"rescue50"', settings[5])
+        self.assertEqual(settings[6], "")
+
+    def test_invalid_event_status_is_rejected(self):
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.execute(
+                "INSERT INTO events (id, name, results_mode) VALUES (?, ?, ?)",
+                ("event-1", "Testevent", "invalid"),
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
