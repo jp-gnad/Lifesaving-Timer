@@ -792,12 +792,21 @@ new MutationObserver(() => {
 async function renderHome() {
   setDocumentTitle("");
   const { events } = await api("/events");
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   events.sort((left, right) => {
     const liveOrder = Number(eventResultsMode(right) === "live") - Number(eventResultsMode(left) === "live");
     if (liveOrder) return liveOrder;
-    const leftDate = left.event_date || String(left.created_at || "").slice(0, 10);
-    const rightDate = right.event_date || String(right.created_at || "").slice(0, 10);
-    return rightDate.localeCompare(leftDate) || String(right.created_at || "").localeCompare(String(left.created_at || ""));
+    const dateGroup = (event) => !event.event_date ? 2 : (event.event_date >= today ? 0 : 1);
+    const groupOrder = dateGroup(left) - dateGroup(right);
+    if (groupOrder) return groupOrder;
+    if (left.event_date && right.event_date) {
+      const dateOrder = left.event_date >= today
+        ? left.event_date.localeCompare(right.event_date)
+        : right.event_date.localeCompare(left.event_date);
+      if (dateOrder) return dateOrder;
+    }
+    return String(right.created_at || "").localeCompare(String(left.created_at || ""));
   });
   app.innerHTML = `
     <div class="page-head">

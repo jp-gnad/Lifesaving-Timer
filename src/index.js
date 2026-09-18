@@ -160,8 +160,14 @@ async function handleApi(request, env) {
       LEFT JOIN results r ON r.event_id = e.id
       GROUP BY e.id
       ORDER BY CASE WHEN e.results_mode = 'live' THEN 0 ELSE 1 END,
-               CASE WHEN e.event_date IS NULL THEN 1 ELSE 0 END,
-               e.event_date DESC, e.created_at DESC
+               CASE
+                 WHEN e.event_date >= DATE('now') THEN 0
+                 WHEN e.event_date < DATE('now') THEN 1
+                 ELSE 2
+               END,
+               CASE WHEN e.event_date >= DATE('now') THEN e.event_date END ASC,
+               CASE WHEN e.event_date < DATE('now') THEN e.event_date END DESC,
+               e.created_at DESC
     `).all();
     return json({ events: results });
   }
