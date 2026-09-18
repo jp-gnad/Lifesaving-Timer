@@ -5,7 +5,7 @@ Eine bewusst einfache, helle Web-App zur Zeitnahme im Rettungssport. Events, Per
 ## Funktionen
 
 - Öffentliche Eventübersicht
-- Event-Einstellungen für Timerstatus, Ergebnisfreigabe, Bahnlänge, Disziplinen und Ergebnis-URL
+- Event-Einstellungen für Timerstatus, Ergebnisfreigabe, Personenmodus, Bahnlänge, Disziplinen und Ergebnis-URL
 - Personen mit Name, Jahrgang, Altersklasse, Geschlecht und Gliederung anlegen und bearbeiten
 - Einzelzeitnahme auf mehreren Geräten gleichzeitig
 - Zwei große Timer-Tasten: links Runde/Löschen, rechts Start/Stopp/Weiter

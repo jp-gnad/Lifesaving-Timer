@@ -49,6 +49,10 @@ function eventTimerEnabled(event) {
   return event?.timer_enabled === undefined || Number(event.timer_enabled) === 1;
 }
 
+function eventParticipantMode(event) {
+  return ['edit', 'view', 'hidden'].includes(event?.participant_mode) ? event.participant_mode : "edit";
+}
+
 function resultModeLabel(mode) {
   return mode === "pause" ? "Pause" : (mode === "stop" ? "Stopp" : "Live");
 }
@@ -861,20 +865,21 @@ async function renderEvent(id) {
   const { event, participants } = await api(`/events/${id}`);
   const timerEnabled = eventTimerEnabled(event);
   const resultsMode = eventResultsMode(event);
+  const participantMode = eventParticipantMode(event);
   setDocumentTitle(event.name);
   app.innerHTML = `
     <a class="back" href="#/" data-history-back>${icon("arrow-left")} Events</a>
     <div class="page-head event-page-head"><div><div class="event-title-row">${eventIconMarkup(event, "event-title-icon")}<h1>${escapeHtml(event.name)}</h1><a class="button secondary icon-button" href="#/settings/${id}" aria-label="Event-Einstellungen" title="Event-Einstellungen">${icon("settings")}</a></div>
       <p class="event-summary">${escapeHtml(dateText(event.event_date))} · ${event.location ? escapeHtml(event.location) : "Kein Ort"} · ${participants.length} Personen</p></div>
     </div>
-    <div class="event-action-grid">
+    <div class="event-action-grid ${participantMode === "hidden" ? "people-hidden" : ""}">
       ${timerEnabled
         ? `<a class="card event-action-tile" href="#/timer/${id}"><span class="event-action-icon">${icon("timer")}</span><strong>Timer</strong></a>`
         : `<div class="card event-action-tile disabled" aria-disabled="true"><span class="event-action-icon">${icon("timer")}</span><strong>Timer</strong></div>`}
       ${resultsMode === "stop"
         ? `<div class="card event-action-tile disabled" aria-disabled="true"><span class="event-action-icon">${icon("table")}</span><strong>Ergebnisse</strong></div>`
         : `<a class="card event-action-tile" href="#/viewer/${id}"><span class="event-action-icon">${icon("table")}</span><strong>Ergebnisse</strong></a>`}
-      <a class="card event-action-tile" href="#/people/${id}"><span class="event-action-icon">${icon("users")}</span><strong>Personen</strong></a>
+      ${participantMode === "hidden" ? "" : `<a class="card event-action-tile" href="#/people/${id}"><span class="event-action-icon">${icon("users")}</span><strong>Personen</strong></a>`}
     </div>`;
 }
 
@@ -908,6 +913,12 @@ async function renderEventSettings(id) {
         <label><input type="radio" name="resultsMode" value="live" ${resultsMode === "live" ? "checked" : ""}><span>Live</span></label>
         <label><input type="radio" name="resultsMode" value="pause" ${resultsMode === "pause" ? "checked" : ""}><span>Pause</span></label>
         <label><input type="radio" name="resultsMode" value="stop" ${resultsMode === "stop" ? "checked" : ""}><span>Stopp</span></label>
+      </div></fieldset>
+
+      <fieldset class="settings-section"><legend>Personen</legend><div class="settings-choice-grid three">
+        <label><input type="radio" name="participantMode" value="edit" ${eventParticipantMode(event) === "edit" ? "checked" : ""}><span>Bearbeiten</span></label>
+        <label><input type="radio" name="participantMode" value="view" ${eventParticipantMode(event) === "view" ? "checked" : ""}><span>Anzeigen</span></label>
+        <label><input type="radio" name="participantMode" value="hidden" ${eventParticipantMode(event) === "hidden" ? "checked" : ""}><span>Verbergen</span></label>
       </div></fieldset>
 
       <fieldset class="settings-section"><legend>Bahnlänge</legend><div class="settings-choice-grid three">
@@ -945,6 +956,7 @@ async function renderEventSettings(id) {
       location: data.get("location"),
       timerEnabled: data.get("timerEnabled") === "true",
       resultsMode: data.get("resultsMode"),
+      participantMode: data.get("participantMode"),
       poolLength: data.get("poolLength"),
       customPoolLength: data.get("customPoolLength"),
       enabledDisciplines: data.getAll("enabledDisciplines"),
@@ -977,11 +989,18 @@ async function renderEventSettings(id) {
 
 async function renderPeople(id) {
   const { event, participants } = await api(`/events/${id}`);
+  const participantMode = eventParticipantMode(event);
+  if (participantMode === "hidden") {
+    setDocumentTitle(`Personen – ${event.name}`);
+    app.innerHTML = `<a class="back" href="#/event/${id}" data-history-back>${icon("arrow-left")} ${escapeHtml(event.name)}</a><div class="empty"><strong>Personen verborgen</strong></div>`;
+    return;
+  }
+  const canEditPeople = participantMode === "edit";
   participants.sort(compareParticipantsByOrganization);
-  const personCardMarkup = (person) => `<button class="person-card person-card-button edit-person" type="button" data-id="${person.id}" aria-label="${escapeHtml(person.name)} bearbeiten">
-    <div class="person-card-content">${personAvatar(person)}<div class="person-card-copy"><div class="person-head"><strong>${escapeHtml(person.name)} (${String(person.birth_year).slice(-2)})</strong></div>
-    <div class="person-details"><span>${escapeHtml(person.organization)} - ${escapeHtml(person.age_group)} - ${person.gender === "male" ? "m" : "w"}</span></div></div></div>
-  </button>`;
+  const personCardContent = (person) => `<div class="person-card-content">${personAvatar(person)}<div class="person-card-copy"><div class="person-head"><strong>${escapeHtml(person.name)} (${String(person.birth_year).slice(-2)})</strong></div>
+    <div class="person-details"><span>${escapeHtml(person.organization)} - ${escapeHtml(person.age_group)} - ${person.gender === "male" ? "m" : "w"}</span></div></div></div>`;
+  const personCardMarkup = (person) => canEditPeople ? `<button class="person-card person-card-button edit-person" type="button" data-id="${person.id}" aria-label="${escapeHtml(person.name)} bearbeiten">
+    ${personCardContent(person)}</button>` : `<div class="person-card">${personCardContent(person)}</div>`;
   const peopleByAgeGroup = [...participants.reduce((groups, person) => {
     const ageGroup = person.age_group || "Ohne Altersklasse";
     if (!groups.has(ageGroup)) groups.set(ageGroup, []);
@@ -993,7 +1012,7 @@ async function renderPeople(id) {
     <a class="back" href="#/event/${id}" data-history-back>${icon("arrow-left")} ${escapeHtml(event.name)}</a>
     <div class="page-head people-page-head"><h1>Personen</h1><div class="people-page-actions">
       <button class="button secondary" id="new-person">${icon("user-plus")} Neu</button>
-      <button class="button secondary" id="import-person">${icon("import")} Importieren</button>
+      ${canEditPeople ? `<button class="button secondary" id="import-person">${icon("import")} Importieren</button>` : ""}
     </div></div>
     <section class="people-list-section" aria-label="Personenliste">
       ${participants.length ? `<div class="person-groups">${peopleByAgeGroup.map(([ageGroup, people], groupIndex) => `<section class="person-age-group" aria-labelledby="age-group-${groupIndex}"><h2 id="age-group-${groupIndex}">${escapeHtml(ageGroup)}</h2><div class="person-list">${people.map(personCardMarkup).join("")}</div></section>`).join("")}</div>` : `<div class="empty">Noch keine Personen.</div>`}
@@ -1041,7 +1060,7 @@ async function renderPeople(id) {
     document.querySelector("#person-error").textContent = "";
     openDialog("#person-dialog");
   });
-  document.querySelector("#import-person").addEventListener("click", () => {
+  document.querySelector("#import-person")?.addEventListener("click", () => {
     clearTimeout(importSearchTimer);
     importRequest += 1;
     importSearch.value = "";

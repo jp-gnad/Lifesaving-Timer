@@ -223,6 +223,8 @@ async function handleApi(request, env) {
     if (typeof timerEnabled !== "boolean") throw new Error("Ungültiger Timer-Status.");
     const resultsMode = body.resultsMode === undefined ? existing.results_mode : body.resultsMode;
     if (!['live', 'pause', 'stop'].includes(resultsMode)) throw new Error("Ungültiger Ergebnis-Status.");
+    const participantMode = body.participantMode === undefined ? existing.participant_mode : body.participantMode;
+    if (!['edit', 'view', 'hidden'].includes(participantMode)) throw new Error("Ungültige Personen-Einstellung.");
     const poolLength = body.poolLength === undefined ? existing.pool_length : String(body.poolLength);
     if (!['25', '50', 'custom'].includes(poolLength)) throw new Error("Ungültige Bahnlänge.");
     const customPoolLength = poolLength === "custom"
@@ -249,20 +251,21 @@ async function handleApi(request, env) {
     await env.DB.prepare(`
       UPDATE events
       SET name = ?, event_date = ?, location = ?, timer_enabled = ?, results_mode = ?, results_paused_at = ?,
-          results_pause_generation = ?, pool_length = ?, custom_pool_length = ?, enabled_disciplines_json = ?, result_url = ?
+          results_pause_generation = ?, participant_mode = ?, pool_length = ?, custom_pool_length = ?, enabled_disciplines_json = ?, result_url = ?
       WHERE id = ?
-    `).bind(name, eventDate, location, timerEnabled ? 1 : 0, resultsMode, pausedAt, pauseGeneration, poolLength,
+    `).bind(name, eventDate, location, timerEnabled ? 1 : 0, resultsMode, pausedAt, pauseGeneration, participantMode, poolLength,
       customPoolLength, JSON.stringify(enabledDisciplines), resultUrl, eventId).run();
     return json({ ok: true });
   }
 
   const activeEvent = await env.DB.prepare(`
-    SELECT id, timer_enabled, results_mode, results_paused_at, results_pause_generation
+    SELECT id, timer_enabled, results_mode, results_paused_at, results_pause_generation, participant_mode
     FROM events WHERE id = ?
   `).bind(eventId).first();
   if (!activeEvent) return fail("Event nicht gefunden.", 404);
 
   if (parts[3] === "participants" && parts[4] === "import" && parts.length === 5 && method === "GET") {
+    if (activeEvent.participant_mode !== "edit") return fail("Der Personenimport ist für dieses Event deaktiviert.", 423);
     const event = await env.DB.prepare("SELECT event_date FROM events WHERE id = ?").bind(eventId).first();
     const eventYear = eventYearOf(event?.event_date);
     if (!eventYear) return fail("Für den Import muss beim Event ein Datum hinterlegt sein.");
@@ -286,6 +289,7 @@ async function handleApi(request, env) {
   }
 
   if (parts[3] === "participants" && parts[4] === "import" && parts.length === 5 && method === "POST") {
+    if (activeEvent.participant_mode !== "edit") return fail("Der Personenimport ist für dieses Event deaktiviert.", 423);
     const body = await bodyOf(request);
     const candidateId = cleanText(body.candidateId, "Person", 32);
     const record = await env.DB.prepare(`
@@ -331,6 +335,7 @@ async function handleApi(request, env) {
   }
 
   if (parts[3] === "participants" && parts[4] && parts.length === 5 && method === "PATCH") {
+    if (activeEvent.participant_mode !== "edit") return fail("Personen können für dieses Event nicht bearbeitet werden.", 423);
     const body = await bodyOf(request);
     const name = cleanText(body.name, "Name");
     const birthYear = Number(body.birthYear);
@@ -348,6 +353,7 @@ async function handleApi(request, env) {
   }
 
   if (parts[3] === "participants" && parts[4] && parts.length === 5 && method === "DELETE") {
+    if (activeEvent.participant_mode !== "edit") return fail("Personen können für dieses Event nicht gelöscht werden.", 423);
     const [, result] = await env.DB.batch([
       env.DB.prepare(`DELETE FROM results WHERE event_id = ? AND id IN (
         SELECT result_id FROM result_members WHERE participant_id = ?

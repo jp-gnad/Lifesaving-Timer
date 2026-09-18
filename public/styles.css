@@ -105,6 +105,7 @@ body.viewer-overview .site-header { height: calc(58px + env(safe-area-inset-top)
 .event-page .container > .back, .event-page .event-page-head, .event-page .event-action-grid { flex: 0 0 auto; }
 .event-page .event-action-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .event-page .event-action-tile:first-child { grid-column: 1 / -1; min-height: 138px; aspect-ratio: auto; }
+.event-page .event-action-grid.people-hidden .event-action-tile:first-child { grid-column: auto; min-height: 0; aspect-ratio: 1 / .9; }
 .people-page .container > .back, .people-page .people-page-head { flex: 0 0 auto; }
 .people-page .people-page-head { margin-bottom: 12px; }
 .people-page-actions { display: flex; align-items: center; gap: 6px; }
@@ -127,8 +128,9 @@ body.viewer-overview .site-header { height: calc(58px + env(safe-area-inset-top)
 .event-action-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .event-action-tile { aspect-ratio: 1 / .9; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: var(--text); text-align: center; text-decoration: none; }
 .event-action-tile:hover { border-color: #b9cff1; background: #f8fbff; }
-.event-action-tile.disabled { opacity: .64; cursor: default; }
-.event-action-tile.disabled:hover { border-color: var(--line); background: var(--surface); }
+.event-action-tile.disabled { border-color: #d5dae2; background: #f0f2f5; color: #818a99; opacity: .72; cursor: default; }
+.event-action-tile.disabled .event-action-icon { background: #dfe3e8; color: #8992a0; }
+.event-action-tile.disabled:hover { border-color: #d5dae2; background: #f0f2f5; }
 .event-action-tile strong { font-size: 18px; }
 .event-action-icon { width: 78px; height: 78px; display: grid; place-items: center; border-radius: 16px; background: #eaf2ff; color: var(--primary); }
 .event-action-icon .icon { width: 47px; height: 47px; stroke-width: 1.5; }
@@ -623,6 +625,7 @@ body.timer-page.review-active { position: fixed; inset: 0; width: 100%; height: 
   .event-action-icon .icon { width: 40px; height: 40px; }
   .event-page .event-action-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .event-page .event-action-tile:first-child { min-height: 112px; }
+  .event-page .event-action-grid.people-hidden .event-action-tile:first-child { min-height: 0; }
   .event-page .event-action-tile { gap: 8px; padding: 8px 5px; }
   .event-page .event-action-tile strong { font-size: 14px; }
   .event-page .event-action-icon { width: 52px; height: 52px; border-radius: 12px; }
