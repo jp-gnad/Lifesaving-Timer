@@ -877,104 +877,129 @@ async function renderEvent(id) {
         ? `<a class="card event-action-tile" href="#/timer/${id}"><span class="event-action-icon">${icon("timer")}</span><strong>Timer</strong></a>`
         : `<div class="card event-action-tile disabled" aria-disabled="true"><span class="event-action-icon">${icon("timer")}</span><strong>Timer</strong></div>`}
       ${resultsMode === "stop"
-        ? `<div class="card event-action-tile disabled" aria-disabled="true"><span class="event-action-icon">${icon("table")}</span><strong>Ergebnisse</strong></div>`
+        ? `<div class="card event-action-tile disabled results-stopped" aria-disabled="true"><span class="event-action-icon">${icon("table")}</span><strong>Ergebnisse</strong></div>`
         : `<a class="card event-action-tile" href="#/viewer/${id}"><span class="event-action-icon">${icon("table")}</span><strong>Ergebnisse</strong></a>`}
       ${participantMode === "hidden" ? "" : `<a class="card event-action-tile" href="#/people/${id}"><span class="event-action-icon">${icon("users")}</span><strong>Personen</strong></a>`}
     </div>`;
 }
 
-async function renderEventSettings(id) {
+async function renderEventSettings(id, section = null) {
   const { event } = await api(`/events/${id}`);
-  const enabledDisciplines = new Set(enabledDisciplinesForEvent(event));
+  const validSections = new Set(["event", "timer", "results", "people"]);
+  const activeSection = validSections.has(section) ? section : null;
+  const enabledDisciplineIds = enabledDisciplinesForEvent(event);
+  const enabledDisciplines = new Set(enabledDisciplineIds);
   const resultsMode = eventResultsMode(event);
+  const participantMode = eventParticipantMode(event);
   const poolLength = ['25', '50', 'custom'].includes(event.pool_length) ? event.pool_length : "25";
-  setDocumentTitle(`Einstellungen – ${event.name}`);
+  const poolLabel = poolLength === "custom" ? `${event.custom_pool_length || "–"} m` : `${poolLength} m`;
+  setDocumentTitle(`${activeSection ? `${activeSection === "event" ? "Event" : activeSection === "timer" ? "Timer" : activeSection === "results" ? "Ergebnisse" : "Personen"} – ` : ""}Einstellungen – ${event.name}`);
+
+  if (!activeSection) {
+    const settingsItems = [
+      { id: "event", name: "Event", detail: `${event.name} · ${dateText(event.event_date)} · ${poolLabel}` },
+      { id: "timer", name: "Timer", detail: `${eventTimerEnabled(event) ? "Aktiviert" : "Deaktiviert"} · ${enabledDisciplineIds.length} Disziplinen` },
+      { id: "results", name: "Ergebnisse", detail: `${resultModeLabel(resultsMode)}${event.result_url ? " · URL hinterlegt" : ""}` },
+      { id: "people", name: "Personen", detail: participantMode === "edit" ? "Bearbeiten" : (participantMode === "view" ? "Anzeigen" : "Verbergen") },
+    ];
+    app.innerHTML = `
+      <a class="back" href="#/event/${id}" data-history-back>${icon("arrow-left")} ${escapeHtml(event.name)}</a>
+      <div class="page-head settings-page-head"><h1>Event-Einstellungen</h1></div>
+      <nav class="settings-overview" aria-label="Einstellungsbereiche">${settingsItems.map((item, index) => `<a class="settings-overview-item" href="#/settings/${id}/${item.id}"><span class="settings-overview-number">${index + 1}</span><span><strong>${item.name}</strong><small>${escapeHtml(item.detail)}</small></span>${icon("arrow-right")}</a>`).join("")}</nav>`;
+    return;
+  }
+
+  const sectionName = activeSection === "event" ? "Event" : activeSection === "timer" ? "Timer" : activeSection === "results" ? "Ergebnisse" : "Personen";
   const disciplineFields = disciplineGroups.map((group) => {
     const entries = Object.entries(disciplines).filter(([, item]) => item.group === group.id);
     return `<fieldset class="settings-section discipline-settings"><legend>${escapeHtml(group.name)}</legend><div class="discipline-settings-list">${entries.map(([disciplineId, item]) => `
       <label class="settings-check"><input type="checkbox" name="enabledDisciplines" value="${disciplineId}" ${enabledDisciplines.has(disciplineId) ? "checked" : ""}><span>${escapeHtml(item.name)}</span></label>`).join("")}</div></fieldset>`;
   }).join("");
-  app.innerHTML = `
-    <a class="back" href="#/event/${id}" data-history-back>${icon("arrow-left")} ${escapeHtml(event.name)}</a>
-    <div class="page-head settings-page-head"><h1>Event-Einstellungen</h1></div>
-    <form id="event-settings-form" class="event-settings-form">
+  const sectionMarkup = activeSection === "event" ? `
       <fieldset class="settings-section"><legend>Event</legend><div class="form-grid">
         <div class="field full"><label for="settings-event-name">Eventname</label><input id="settings-event-name" name="name" maxlength="120" required value="${escapeHtml(event.name)}"></div>
         <div class="field event-date-field"><label for="settings-event-date">Datum</label><input id="settings-event-date" name="eventDate" type="date" value="${escapeHtml(event.event_date || "")}"></div>
         <div class="field"><label for="settings-event-location">Ort</label><input id="settings-event-location" name="location" maxlength="120" value="${escapeHtml(event.location || "")}"></div>
       </div></fieldset>
-
-      <fieldset class="settings-section"><legend>Timer</legend><div class="settings-choice-grid two">
-        <label><input type="radio" name="timerEnabled" value="true" ${eventTimerEnabled(event) ? "checked" : ""}><span>Aktiviert</span></label>
-        <label><input type="radio" name="timerEnabled" value="false" ${eventTimerEnabled(event) ? "" : "checked"}><span>Deaktiviert</span></label>
-      </div></fieldset>
-
-      <fieldset class="settings-section"><legend>Ergebnisse</legend><div class="settings-choice-grid three results-mode-settings">
-        <label><input type="radio" name="resultsMode" value="live" ${resultsMode === "live" ? "checked" : ""}><span>Live</span></label>
-        <label><input type="radio" name="resultsMode" value="pause" ${resultsMode === "pause" ? "checked" : ""}><span>Pause</span></label>
-        <label><input type="radio" name="resultsMode" value="stop" ${resultsMode === "stop" ? "checked" : ""}><span>Stopp</span></label>
-      </div></fieldset>
-
-      <fieldset class="settings-section"><legend>Personen</legend><div class="settings-choice-grid three">
-        <label><input type="radio" name="participantMode" value="edit" ${eventParticipantMode(event) === "edit" ? "checked" : ""}><span>Bearbeiten</span></label>
-        <label><input type="radio" name="participantMode" value="view" ${eventParticipantMode(event) === "view" ? "checked" : ""}><span>Anzeigen</span></label>
-        <label><input type="radio" name="participantMode" value="hidden" ${eventParticipantMode(event) === "hidden" ? "checked" : ""}><span>Verbergen</span></label>
-      </div></fieldset>
-
       <fieldset class="settings-section"><legend>Bahnlänge</legend><div class="settings-choice-grid three">
         <label><input type="radio" name="poolLength" value="25" ${poolLength === "25" ? "checked" : ""}><span>25 m</span></label>
         <label><input type="radio" name="poolLength" value="50" ${poolLength === "50" ? "checked" : ""}><span>50 m</span></label>
         <label><input type="radio" name="poolLength" value="custom" ${poolLength === "custom" ? "checked" : ""}><span>Eigene</span></label>
-      </div><label class="field custom-pool-length" ${poolLength === "custom" ? "" : "hidden"}><span>Bahnlänge in Metern</span><input id="custom-pool-length" name="customPoolLength" type="number" min="1" max="10000" step="0.01" inputmode="decimal" value="${event.custom_pool_length ?? ""}"></label></fieldset>
+      </div><label class="field custom-pool-length" ${poolLength === "custom" ? "" : "hidden"}><span>Bahnlänge in Metern</span><input id="custom-pool-length" name="customPoolLength" type="number" min="1" max="10000" step="0.01" inputmode="decimal" value="${event.custom_pool_length ?? ""}"></label></fieldset>`
+    : activeSection === "timer" ? `
+      <fieldset class="settings-section"><legend>Status</legend><div class="settings-choice-grid two">
+        <label><input type="radio" name="timerEnabled" value="true" ${eventTimerEnabled(event) ? "checked" : ""}><span>Aktiviert</span></label>
+        <label><input type="radio" name="timerEnabled" value="false" ${eventTimerEnabled(event) ? "" : "checked"}><span>Deaktiviert</span></label>
+      </div></fieldset>
+      <div class="settings-disciplines"><h2>Disziplinen</h2><p>Diese Disziplinen stehen im Timer zur Auswahl.</p>${disciplineFields}</div>`
+    : activeSection === "results" ? `
+      <fieldset class="settings-section"><legend>Status</legend><div class="settings-choice-grid three results-mode-settings">
+        <label><input type="radio" name="resultsMode" value="live" ${resultsMode === "live" ? "checked" : ""}><span>Live</span></label>
+        <label><input type="radio" name="resultsMode" value="pause" ${resultsMode === "pause" ? "checked" : ""}><span>Pause</span></label>
+        <label><input type="radio" name="resultsMode" value="stop" ${resultsMode === "stop" ? "checked" : ""}><span>Stopp</span></label>
+      </div></fieldset>
+      <fieldset class="settings-section"><legend>Ergebnis-URL</legend><label class="field"><span>Link <small>ohne Funktion</small></span><input name="resultUrl" type="url" inputmode="url" maxlength="500" placeholder="https://…" value="${escapeHtml(event.result_url || "")}"></label></fieldset>`
+    : `<fieldset class="settings-section"><legend>Personen</legend><div class="settings-choice-grid three">
+        <label><input type="radio" name="participantMode" value="edit" ${participantMode === "edit" ? "checked" : ""}><span>Bearbeiten</span></label>
+        <label><input type="radio" name="participantMode" value="view" ${participantMode === "view" ? "checked" : ""}><span>Anzeigen</span></label>
+        <label><input type="radio" name="participantMode" value="hidden" ${participantMode === "hidden" ? "checked" : ""}><span>Verbergen</span></label>
+      </div></fieldset>`;
 
-      <div class="settings-disciplines"><h2>Disziplinen</h2><p>Diese Disziplinen stehen im Timer zur Auswahl.</p>${disciplineFields}</div>
-
-      <fieldset class="settings-section"><legend>Ergebnis-URL</legend><label class="field"><span>Link <small>ohne Funktion</small></span><input name="resultUrl" type="url" inputmode="url" maxlength="500" placeholder="https://…" value="${escapeHtml(event.result_url || "")}"></label></fieldset>
-
+  app.innerHTML = `
+    <a class="back" href="#/settings/${id}" data-history-back>${icon("arrow-left")} Event-Einstellungen</a>
+    <div class="page-head settings-page-head"><h1>${sectionName}</h1></div>
+    <form id="event-settings-form" class="event-settings-form">
+      ${sectionMarkup}
       <p class="form-error" id="event-settings-error" role="alert"></p>
-      <div class="event-settings-actions"><a class="button secondary" href="#/event/${id}" data-history-back>Abbrechen</a><button class="button" type="submit">Speichern</button></div>
-      <button type="button" class="button danger small event-settings-delete" id="delete-event-settings">${icon("trash")} Event löschen</button>
+      <div class="event-settings-actions"><a class="button secondary" href="#/settings/${id}" data-history-back>Abbrechen</a><button class="button" type="submit">Speichern</button></div>
+      ${activeSection === "event" ? `<button type="button" class="button danger small event-settings-delete" id="delete-event-settings">${icon("trash")} Event löschen</button>` : ""}
     </form>`;
 
   const form = document.querySelector("#event-settings-form");
-  const customPoolField = form.querySelector(".custom-pool-length");
-  const customPoolInput = form.querySelector("#custom-pool-length");
-  form.querySelectorAll('[name="poolLength"]').forEach((input) => input.addEventListener("change", () => {
-    const custom = form.elements.poolLength.value === "custom";
-    customPoolField.hidden = !custom;
-    customPoolInput.required = custom;
-  }));
-  customPoolInput.required = poolLength === "custom";
+  if (activeSection === "event") {
+    const customPoolField = form.querySelector(".custom-pool-length");
+    const customPoolInput = form.querySelector("#custom-pool-length");
+    form.querySelectorAll('[name="poolLength"]').forEach((input) => input.addEventListener("change", () => {
+      const custom = form.elements.poolLength.value === "custom";
+      customPoolField.hidden = !custom;
+      customPoolInput.required = custom;
+    }));
+    customPoolInput.required = poolLength === "custom";
+  }
   form.addEventListener("submit", async (submitEvent) => {
     submitEvent.preventDefault();
     const submitButton = submitEvent.submitter;
     const error = document.querySelector("#event-settings-error");
     const data = new FormData(form);
     const payload = {
-      name: data.get("name"),
-      eventDate: data.get("eventDate"),
-      location: data.get("location"),
-      timerEnabled: data.get("timerEnabled") === "true",
-      resultsMode: data.get("resultsMode"),
-      participantMode: data.get("participantMode"),
-      poolLength: data.get("poolLength"),
-      customPoolLength: data.get("customPoolLength"),
-      enabledDisciplines: data.getAll("enabledDisciplines"),
-      resultUrl: data.get("resultUrl"),
+      name: event.name,
+      eventDate: event.event_date || "",
+      location: event.location || "",
+      timerEnabled: eventTimerEnabled(event),
+      resultsMode,
+      participantMode,
+      poolLength,
+      customPoolLength: event.custom_pool_length ?? "",
+      enabledDisciplines: enabledDisciplineIds,
+      resultUrl: event.result_url || "",
     };
+    if (activeSection === "event") Object.assign(payload, { name: data.get("name"), eventDate: data.get("eventDate"), location: data.get("location"), poolLength: data.get("poolLength"), customPoolLength: data.get("customPoolLength") });
+    else if (activeSection === "timer") Object.assign(payload, { timerEnabled: data.get("timerEnabled") === "true", enabledDisciplines: data.getAll("enabledDisciplines") });
+    else if (activeSection === "results") Object.assign(payload, { resultsMode: data.get("resultsMode"), resultUrl: data.get("resultUrl") });
+    else Object.assign(payload, { participantMode: data.get("participantMode") });
     try {
       submitButton.disabled = true;
       error.textContent = "";
       await api(`/events/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
       if (payload.timerEnabled) syncPendingResults({ includeBlocked: true }).catch(() => {});
       if (history.length > 1) history.back();
-      else location.hash = `#/event/${id}`;
+      else location.hash = `#/settings/${id}`;
     } catch (err) {
       error.textContent = err.message;
       submitButton.disabled = false;
     }
   });
-  document.querySelector("#delete-event-settings").addEventListener("click", async (deleteEvent) => {
+  document.querySelector("#delete-event-settings")?.addEventListener("click", async (deleteEvent) => {
     if (!confirm(`Event „${event.name}“ mit allen Personen und Ergebnissen unwiderruflich löschen?`)) return;
     try {
       deleteEvent.currentTarget.disabled = true;
@@ -2553,7 +2578,7 @@ async function renderRoute() {
     if (current.page === "home") return await renderHome();
     if (!current.id) throw new Error("Die Adresse ist unvollständig.");
     if (current.page === "event") return await renderEvent(current.id);
-    if (current.page === "settings") return await renderEventSettings(current.id);
+    if (current.page === "settings") return await renderEventSettings(current.id, current.discipline);
     if (current.page === "people") return await renderPeople(current.id);
     if (current.page === "timer") return await renderTimer(current.id);
     if (current.page === "viewer") return await renderViewer(current.id, current.discipline, current.gender);
