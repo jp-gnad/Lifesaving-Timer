@@ -1,10 +1,10 @@
-const staticCache = "lifesaving-timer-static-v23";
+const staticCache = "lifesaving-timer-static-v28";
 const eventCache = "lifesaving-timer-events-v1";
 const appShell = [
   "/",
   "/index.html",
-  "/styles.css?v=stopped-results-accent",
-  "/app.js?v=stopped-results-accent",
+  "/styles.css?v=timer-settings-copy",
+  "/app.js?v=timer-settings-copy",
   "/icons.svg?v=event-settings",
   "/app-icon-64.png",
   "/app-icon-180.png",

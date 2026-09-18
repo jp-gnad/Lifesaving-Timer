@@ -877,45 +877,29 @@ async function renderEvent(id) {
         ? `<a class="card event-action-tile" href="#/timer/${id}"><span class="event-action-icon">${icon("timer")}</span><strong>Timer</strong></a>`
         : `<div class="card event-action-tile disabled" aria-disabled="true"><span class="event-action-icon">${icon("timer")}</span><strong>Timer</strong></div>`}
       ${resultsMode === "stop"
-        ? `<div class="card event-action-tile disabled results-stopped" aria-disabled="true"><span class="event-action-icon">${icon("table")}</span><strong>Ergebnisse</strong></div>`
-        : `<a class="card event-action-tile" href="#/viewer/${id}"><span class="event-action-icon">${icon("table")}</span><strong>Ergebnisse</strong></a>`}
+        ? `<div class="card event-action-tile disabled" aria-disabled="true"><span class="event-action-icon">${icon("table")}</span><strong>Ergebnisse</strong></div>`
+        : `<a class="card event-action-tile ${resultsMode === "pause" ? "results-paused" : ""}" href="#/viewer/${id}"><span class="event-action-icon">${icon("table")}</span><strong>Ergebnisse</strong></a>`}
       ${participantMode === "hidden" ? "" : `<a class="card event-action-tile" href="#/people/${id}"><span class="event-action-icon">${icon("users")}</span><strong>Personen</strong></a>`}
     </div>`;
 }
 
 async function renderEventSettings(id, section = null) {
   const { event } = await api(`/events/${id}`);
-  const validSections = new Set(["event", "timer", "results", "people"]);
+  const validSections = new Set(["timer", "results", "people"]);
   const activeSection = validSections.has(section) ? section : null;
   const enabledDisciplineIds = enabledDisciplinesForEvent(event);
   const enabledDisciplines = new Set(enabledDisciplineIds);
   const resultsMode = eventResultsMode(event);
   const participantMode = eventParticipantMode(event);
   const poolLength = ['25', '50', 'custom'].includes(event.pool_length) ? event.pool_length : "25";
-  const poolLabel = poolLength === "custom" ? `${event.custom_pool_length || "–"} m` : `${poolLength} m`;
-  setDocumentTitle(`${activeSection ? `${activeSection === "event" ? "Event" : activeSection === "timer" ? "Timer" : activeSection === "results" ? "Ergebnisse" : "Personen"} – ` : ""}Einstellungen – ${event.name}`);
-
-  if (!activeSection) {
-    const settingsItems = [
-      { id: "event", name: "Event", detail: `${event.name} · ${dateText(event.event_date)} · ${poolLabel}` },
-      { id: "timer", name: "Timer", detail: `${eventTimerEnabled(event) ? "Aktiviert" : "Deaktiviert"} · ${enabledDisciplineIds.length} Disziplinen` },
-      { id: "results", name: "Ergebnisse", detail: `${resultModeLabel(resultsMode)}${event.result_url ? " · URL hinterlegt" : ""}` },
-      { id: "people", name: "Personen", detail: participantMode === "edit" ? "Bearbeiten" : (participantMode === "view" ? "Anzeigen" : "Verbergen") },
-    ];
-    app.innerHTML = `
-      <a class="back" href="#/event/${id}" data-history-back>${icon("arrow-left")} ${escapeHtml(event.name)}</a>
-      <div class="page-head settings-page-head"><h1>Event-Einstellungen</h1></div>
-      <nav class="settings-overview" aria-label="Einstellungsbereiche">${settingsItems.map((item, index) => `<a class="settings-overview-item" href="#/settings/${id}/${item.id}"><span class="settings-overview-number">${index + 1}</span><span><strong>${item.name}</strong><small>${escapeHtml(item.detail)}</small></span>${icon("arrow-right")}</a>`).join("")}</nav>`;
-    return;
-  }
-
-  const sectionName = activeSection === "event" ? "Event" : activeSection === "timer" ? "Timer" : activeSection === "results" ? "Ergebnisse" : "Personen";
+  setDocumentTitle(`${activeSection ? `${activeSection === "timer" ? "Timer" : activeSection === "results" ? "Ergebnisse" : "Personen"} – ` : ""}Einstellungen – ${event.name}`);
+  const sectionName = activeSection === "timer" ? "Timer" : activeSection === "results" ? "Ergebnisse" : "Personen";
   const disciplineFields = disciplineGroups.map((group) => {
     const entries = Object.entries(disciplines).filter(([, item]) => item.group === group.id);
     return `<fieldset class="settings-section discipline-settings"><legend>${escapeHtml(group.name)}</legend><div class="discipline-settings-list">${entries.map(([disciplineId, item]) => `
       <label class="settings-check"><input type="checkbox" name="enabledDisciplines" value="${disciplineId}" ${enabledDisciplines.has(disciplineId) ? "checked" : ""}><span>${escapeHtml(item.name)}</span></label>`).join("")}</div></fieldset>`;
   }).join("");
-  const sectionMarkup = activeSection === "event" ? `
+  const eventMarkup = `
       <fieldset class="settings-section"><legend>Event</legend><div class="form-grid">
         <div class="field full"><label for="settings-event-name">Eventname</label><input id="settings-event-name" name="name" maxlength="120" required value="${escapeHtml(event.name)}"></div>
         <div class="field event-date-field"><label for="settings-event-date">Datum</label><input id="settings-event-date" name="eventDate" type="date" value="${escapeHtml(event.event_date || "")}"></div>
@@ -925,13 +909,13 @@ async function renderEventSettings(id, section = null) {
         <label><input type="radio" name="poolLength" value="25" ${poolLength === "25" ? "checked" : ""}><span>25 m</span></label>
         <label><input type="radio" name="poolLength" value="50" ${poolLength === "50" ? "checked" : ""}><span>50 m</span></label>
         <label><input type="radio" name="poolLength" value="custom" ${poolLength === "custom" ? "checked" : ""}><span>Eigene</span></label>
-      </div><label class="field custom-pool-length" ${poolLength === "custom" ? "" : "hidden"}><span>Bahnlänge in Metern</span><input id="custom-pool-length" name="customPoolLength" type="number" min="1" max="10000" step="0.01" inputmode="decimal" value="${event.custom_pool_length ?? ""}"></label></fieldset>`
-    : activeSection === "timer" ? `
+      </div><label class="field custom-pool-length" ${poolLength === "custom" ? "" : "hidden"}><span>Bahnlänge in Metern</span><input id="custom-pool-length" name="customPoolLength" type="number" min="1" max="10000" step="0.01" inputmode="decimal" value="${event.custom_pool_length ?? ""}"></label></fieldset>`;
+  const sectionMarkup = activeSection === "timer" ? `
       <fieldset class="settings-section"><legend>Status</legend><div class="settings-choice-grid two">
         <label><input type="radio" name="timerEnabled" value="true" ${eventTimerEnabled(event) ? "checked" : ""}><span>Aktiviert</span></label>
         <label><input type="radio" name="timerEnabled" value="false" ${eventTimerEnabled(event) ? "" : "checked"}><span>Deaktiviert</span></label>
       </div></fieldset>
-      <div class="settings-disciplines"><h2>Disziplinen</h2><p>Diese Disziplinen stehen im Timer zur Auswahl.</p>${disciplineFields}</div>`
+      <div class="settings-disciplines"><h2>Disziplinen</h2>${disciplineFields}</div>`
     : activeSection === "results" ? `
       <fieldset class="settings-section"><legend>Status</legend><div class="settings-choice-grid three results-mode-settings">
         <label><input type="radio" name="resultsMode" value="live" ${resultsMode === "live" ? "checked" : ""}><span>Live</span></label>
@@ -945,18 +929,36 @@ async function renderEventSettings(id, section = null) {
         <label><input type="radio" name="participantMode" value="hidden" ${participantMode === "hidden" ? "checked" : ""}><span>Verbergen</span></label>
       </div></fieldset>`;
 
-  app.innerHTML = `
-    <a class="back" href="#/settings/${id}" data-history-back>${icon("arrow-left")} Event-Einstellungen</a>
-    <div class="page-head settings-page-head"><h1>${sectionName}</h1></div>
-    <form id="event-settings-form" class="event-settings-form">
-      ${sectionMarkup}
-      <p class="form-error" id="event-settings-error" role="alert"></p>
-      <div class="event-settings-actions"><a class="button secondary" href="#/settings/${id}" data-history-back>Abbrechen</a><button class="button" type="submit">Speichern</button></div>
-      ${activeSection === "event" ? `<button type="button" class="button danger small event-settings-delete" id="delete-event-settings">${icon("trash")} Event löschen</button>` : ""}
-    </form>`;
+  if (!activeSection) {
+    const settingsItems = [
+      { id: "timer", icon: "timer", name: "Timer", detail: eventTimerEnabled(event) ? "Aktiviert" : "Deaktiviert" },
+      { id: "results", icon: "table", name: "Ergebnisse", detail: resultModeLabel(resultsMode) },
+      { id: "people", icon: "users", name: "Personen", detail: participantMode === "edit" ? "Bearbeiten" : (participantMode === "view" ? "Anzeigen" : "Verbergen") },
+    ];
+    app.innerHTML = `
+      <a class="back" href="#/event/${id}" data-history-back>${icon("arrow-left")} ${escapeHtml(event.name)}</a>
+      <div class="page-head settings-page-head"><h1>Event-Einstellungen</h1></div>
+      <form id="event-settings-form" class="event-settings-form settings-overview-event">
+        <div class="settings-inline-heading"><span class="settings-overview-symbol">${icon("calendar")}</span><strong>Event</strong></div>
+        ${eventMarkup}
+        <p class="form-error" id="event-settings-error" role="alert"></p>
+        <div class="event-settings-actions"><a class="button secondary" href="#/event/${id}" data-history-back>Abbrechen</a><button class="button" type="submit">Speichern</button></div>
+        <button type="button" class="button danger small event-settings-delete" id="delete-event-settings">${icon("trash")} Event löschen</button>
+      </form>
+      <nav class="settings-overview" aria-label="Weitere Einstellungsbereiche">${settingsItems.map((item) => `<a class="settings-overview-item" href="#/settings/${id}/${item.id}"><span class="settings-overview-symbol">${icon(item.icon)}</span><span><strong>${item.name}</strong><small>${escapeHtml(item.detail)}</small></span>${icon("arrow-right")}</a>`).join("")}</nav>`;
+  } else {
+    app.innerHTML = `
+      <a class="back" href="#/settings/${id}" data-history-back>${icon("arrow-left")} Event-Einstellungen</a>
+      <div class="page-head settings-page-head"><h1>${sectionName}</h1></div>
+      <form id="event-settings-form" class="event-settings-form">
+        ${sectionMarkup}
+        <p class="form-error" id="event-settings-error" role="alert"></p>
+        <div class="event-settings-actions"><a class="button secondary" href="#/settings/${id}" data-history-back>Abbrechen</a><button class="button" type="submit">Speichern</button></div>
+      </form>`;
+  }
 
   const form = document.querySelector("#event-settings-form");
-  if (activeSection === "event") {
+  if (!activeSection) {
     const customPoolField = form.querySelector(".custom-pool-length");
     const customPoolInput = form.querySelector("#custom-pool-length");
     form.querySelectorAll('[name="poolLength"]').forEach((input) => input.addEventListener("change", () => {
@@ -983,7 +985,7 @@ async function renderEventSettings(id, section = null) {
       enabledDisciplines: enabledDisciplineIds,
       resultUrl: event.result_url || "",
     };
-    if (activeSection === "event") Object.assign(payload, { name: data.get("name"), eventDate: data.get("eventDate"), location: data.get("location"), poolLength: data.get("poolLength"), customPoolLength: data.get("customPoolLength") });
+    if (!activeSection) Object.assign(payload, { name: data.get("name"), eventDate: data.get("eventDate"), location: data.get("location"), poolLength: data.get("poolLength"), customPoolLength: data.get("customPoolLength") });
     else if (activeSection === "timer") Object.assign(payload, { timerEnabled: data.get("timerEnabled") === "true", enabledDisciplines: data.getAll("enabledDisciplines") });
     else if (activeSection === "results") Object.assign(payload, { resultsMode: data.get("resultsMode"), resultUrl: data.get("resultUrl") });
     else Object.assign(payload, { participantMode: data.get("participantMode") });
