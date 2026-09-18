@@ -882,14 +882,14 @@ async function renderEventSettings(id) {
       </div></fieldset>
 
       <fieldset class="settings-section"><legend>Timer</legend><div class="settings-choice-grid two">
-        <label><input type="radio" name="timerEnabled" value="true" ${eventTimerEnabled(event) ? "checked" : ""}><span>Aktiviert<small>Timer kann verwendet werden</small></span></label>
-        <label><input type="radio" name="timerEnabled" value="false" ${eventTimerEnabled(event) ? "" : "checked"}><span>Deaktiviert<small>Timer ist gesperrt</small></span></label>
+        <label><input type="radio" name="timerEnabled" value="true" ${eventTimerEnabled(event) ? "checked" : ""}><span>Aktiviert</span></label>
+        <label><input type="radio" name="timerEnabled" value="false" ${eventTimerEnabled(event) ? "" : "checked"}><span>Deaktiviert</span></label>
       </div></fieldset>
 
       <fieldset class="settings-section"><legend>Ergebnisse</legend><div class="settings-choice-grid three results-mode-settings">
-        <label><input type="radio" name="resultsMode" value="live" ${resultsMode === "live" ? "checked" : ""}><span>Live<small>anzeigen und synchronisieren</small></span></label>
-        <label><input type="radio" name="resultsMode" value="pause" ${resultsMode === "pause" ? "checked" : ""}><span>Pause<small>Stand einfrieren</small></span></label>
-        <label><input type="radio" name="resultsMode" value="stop" ${resultsMode === "stop" ? "checked" : ""}><span>Stopp<small>nichts anzeigen oder laden</small></span></label>
+        <label><input type="radio" name="resultsMode" value="live" ${resultsMode === "live" ? "checked" : ""}><span>Live</span></label>
+        <label><input type="radio" name="resultsMode" value="pause" ${resultsMode === "pause" ? "checked" : ""}><span>Pause</span></label>
+        <label><input type="radio" name="resultsMode" value="stop" ${resultsMode === "stop" ? "checked" : ""}><span>Stopp</span></label>
       </div></fieldset>
 
       <fieldset class="settings-section"><legend>Bahnlänge</legend><div class="settings-choice-grid three">
@@ -903,7 +903,7 @@ async function renderEventSettings(id) {
       <fieldset class="settings-section"><legend>Ergebnis-URL</legend><label class="field"><span>Link <small>ohne Funktion</small></span><input name="resultUrl" type="url" inputmode="url" maxlength="500" placeholder="https://…" value="${escapeHtml(event.result_url || "")}"></label></fieldset>
 
       <p class="form-error" id="event-settings-error" role="alert"></p>
-      <div class="event-settings-actions"><a class="button secondary" href="#/event/${id}">Abbrechen</a><button class="button" type="submit">Speichern</button></div>
+      <div class="event-settings-actions"><a class="button secondary" href="#/event/${id}" data-history-back>Abbrechen</a><button class="button" type="submit">Speichern</button></div>
       <button type="button" class="button danger small event-settings-delete" id="delete-event-settings">${icon("trash")} Event löschen</button>
     </form>`;
 
@@ -937,7 +937,8 @@ async function renderEventSettings(id) {
       error.textContent = "";
       await api(`/events/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
       if (payload.timerEnabled && payload.resultsMode === "live") syncPendingResults({ includeBlocked: true }).catch(() => {});
-      location.hash = `#/event/${id}`;
+      if (history.length > 1) history.back();
+      else location.hash = `#/event/${id}`;
     } catch (err) {
       error.textContent = err.message;
       submitButton.disabled = false;
