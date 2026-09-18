@@ -243,8 +243,6 @@ dialog::backdrop { background: rgba(20, 29, 44, .48); }
 .settings-page-head { margin-bottom: 10px; }
 .settings-overview { display: grid; gap: 9px; }
 .settings-overview-event { margin-bottom: 14px; }
-.settings-inline-heading { display: flex; align-items: center; gap: 10px; margin-bottom: -6px; padding: 0 2px; }
-.settings-inline-heading strong { font-size: 16px; }
 .settings-overview-item { min-width: 0; min-height: 68px; border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; background: var(--surface); color: var(--text); text-decoration: none; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 10px; }
 .settings-overview-item:hover { border-color: #b9cff1; background: #f8fbff; }
 .settings-overview-item:focus-visible { outline: 3px solid rgba(18,99,223,.25); outline-offset: 2px; }
